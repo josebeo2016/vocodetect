@@ -1,0 +1,23 @@
+optimizer: Adam 
+amsgrad: 1   #for adam optim
+lr: 0.00001
+
+#model-related
+model:
+  name: bioEncoderlight
+  bio_dim: 102
+  nb_fc_node: 512
+
+  n_dec_layers: 2
+  dec: [[256, 128], [128, 102]] # out channel == in_channel
+  vae_rate: 0.001
+  nb_classes: 2
+
+
+dataset:
+  feat_type: 'mpd_ys_102'
+
+  
+
+
+
