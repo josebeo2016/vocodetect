@@ -138,5 +138,5 @@ models/
 logs/
 feats*/
 
-hifi-gan/cp_16k/
-hifi-gan/cp_hifigan_LJ/
+cp_16k/
+cp_hifigan_LJ/
