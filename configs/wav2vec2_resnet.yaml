@@ -1,0 +1,9 @@
+model:
+  name: wav2vec2_resnet
+  resnet:
+    num_nodes: 3
+    enc_dim: 256
+    resnet_type: '18'
+    nclasses: 5
+data:
+  name: 'vocv4'

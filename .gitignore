@@ -135,8 +135,9 @@ pretrained/
 
 # models
 models/
+out/
 logs/
 feats*/
-
-cp_16k/
-cp_hifigan_LJ/
+GAN_Dis_detect/hifi-gan/cp_16k/*
+GAN_Dis_detect/hifi-gan/cp_hifigan_LJ/*
+xinwang_vocoders/
