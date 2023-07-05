@@ -28,11 +28,23 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     with open(dir_meta, 'r') as f:
          l_meta = f.readlines()
     
-    if (is_train) or (is_dev):
+    if (is_train):
         for line in l_meta:
             key, subset, label = line.strip().split()
-            file_list.append(key)
-            d_meta[key] = LABELS[label]
+            if subset == 'train':
+                file_list.append(key)
+                d_meta[key] = LABELS[label]
+        return d_meta, file_list
+    
+    if (is_dev):
+        for line in l_meta:
+            key, subset, label = line.strip().split()
+            if subset == 'dev':
+                file_list.append(key)
+                if label not in LABELS:
+                    d_meta[key] = -1 # pytorch_ood unknown label
+                else:
+                    d_meta[key] = LABELS[label]
         return d_meta, file_list
     
     elif(is_eval):

@@ -32,7 +32,7 @@ def evaluate_accuracy(dev_loader, model, device):
         num_total += batch_size
         batch_x = batch_x.to(device)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        batch_out = model(batch_x)
+        batch_out, _ = model(batch_x)
         _, batch_pred = batch_out.max(dim=1)
         num_correct += (batch_pred == batch_y).sum(dim=0).item()
         
@@ -61,7 +61,7 @@ def produce_prediction_file(dataset, model, device, save_path):
         batch_size = batch_x.size(0)
         batch_x = batch_x.to(device)
         
-        batch_out = model(batch_x)
+        batch_out, _ = model(batch_x)
         
         batch_score = (batch_out[:, 1]  
                        ).data.cpu().numpy().ravel() 
@@ -95,7 +95,7 @@ def produce_evaluation_file(dataset, model, device, save_path):
         
         batch_out = model(batch_x)
         
-        batch_score = (batch_out[:, 1]  
+        batch_score, _ = (batch_out[:, 1]  
                        ).data.cpu().numpy().ravel() 
         # add outputs
         fname_list.extend(utt_id)
@@ -125,7 +125,7 @@ def train_epoch(train_loader, model, lr,optim, device):
         
         batch_x = batch_x.to(device)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        batch_out = model(batch_x)
+        batch_out, _ = model(batch_x)
         
         batch_loss = criterion(batch_out, batch_y)
         

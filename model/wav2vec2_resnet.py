@@ -53,10 +53,10 @@ class SSLModel(nn.Module):
         return emb
 
 class Model(nn.Module):
-    def __init__(self, args, device):
+    def __init__(self, args, device, emb = True):
         super().__init__()
         self.device = device
-        
+        self.emb = emb
         ####
         # create network wav2vec 2.0
         ####
@@ -88,6 +88,7 @@ class Model(nn.Module):
         x = self.selu(x)  
         # ResNet backend
         output, emb = self.resnet(x)
-        
-        return output, emb
+        if (self.emb):
+            return output, emb
+        return output
     
