@@ -1,0 +1,10 @@
+model:
+  name: wav2vec2_aasist
+  aasist:
+    filts: [128, [1, 32], [32, 32], [32, 64], [64, 64]]
+    gat_dims: [64, 32]
+    pool_ratios: [0.5, 0.5, 0.5, 0.5]
+    temperatures: [2.0, 2.0, 100.0, 100.0]
+    nclasses: 5
+data:
+  name: 'vocv4'
