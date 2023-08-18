@@ -43,10 +43,10 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     
     elif(is_eval):
         for line in l_meta:
-            _, key, _, _, label = line.strip().split()
-            file_list.append(key)
-            d_meta[key] = 1 if label == 'bonafide' else 0
-        return d_meta, file_list
+            key = line.strip().split()
+            file_list.append(key[0])
+
+        return [], file_list
 
 def pad(x, utt_id, max_len=64600):
     x_len = x.shape[0]
@@ -129,7 +129,7 @@ class Dataset_for(Dataset):
         # return will be anchor ID, batch data and label
         batch_data = Tensor(batch_data)
         # label is 1 for anchor and positive, 0 for vocoded
-        label = [1] * (len(self.augmentation_methods) + len(additional_audios) + 1) + [0] * len(self.vocoders)
+        label = [1] * (len(augmented_audios) + len(additional_audios) + 1) + [0] * len(self.vocoders)
         return self.list_IDs[idx], batch_data, Tensor(label)
 
 class Dataset_for_eval(Dataset):

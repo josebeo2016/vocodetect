@@ -11,6 +11,8 @@ import yaml
 from model.wav2vec2_resnet import Model as wav2vec2_resnet
 from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
+from model.wav2vec2_linear import Model as wav2vec2_linear
+from model.wav2vec2_linear_phucdt import Model as wav2vec2_linear_phucdt  
 import importlib
 from tensorboardX import SummaryWriter
 
@@ -22,10 +24,12 @@ __email__ = "tak@eurecom.fr"
 
 def evaluate_accuracy(dev_loader, model, device):
     val_loss = 0.0
+    val_loss_detail = {}
     num_total = 0.0
     num_correct = 0.0
     model.eval()
     for info, batch_x, batch_y in dev_loader:
+        loss_value = 0.0
         # print("Validating on anchor: ", info)
         # print("batch_x.shape", batch_x.shape)
         num_total +=batch_x.shape[2]
@@ -33,15 +37,18 @@ def evaluate_accuracy(dev_loader, model, device):
 
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
         batch_out, batch_feat, batch_emb = model(batch_x)
-        loss = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
-        val_loss+=loss.item()
+        losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
+        for key, value in losses.items():
+            loss_value += value
+            val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()/num_total
+        val_loss+=loss_value.item()
         _, batch_pred = batch_out.max(dim=1)
         num_correct += (batch_pred == batch_y).sum(dim=0).item()
         
     val_loss /= num_total
     val_accuracy = (num_correct/num_total)*100
    
-    return val_loss, val_accuracy
+    return val_loss, val_accuracy, val_loss_detail
 
 
 def produce_prediction_file(dataset, model, device, save_path):
@@ -115,7 +122,9 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
     running_loss = 0.0
     num_correct = 0.0
     num_total = 0.0
+    train_loss_detail = {}
     for info, batch_x, batch_y in train_loader:
+        train_loss = 0.0
         # print("training on anchor: ", info)
         # print("batch_x.shape", batch_x.shape)
         num_total +=batch_x.shape[2]
@@ -123,18 +132,22 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
 
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
         batch_out, batch_feat, batch_emb = model(batch_x)
-        loss = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
-        running_loss+=loss.item()
+        losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
+        for key, value in losses.items():
+            train_loss += value
+            train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()/num_total
+            
+        running_loss+=train_loss.item()
         _, batch_pred = batch_out.max(dim=1)
         num_correct += (batch_pred == batch_y).sum(dim=0).item()
         
         optimizer.zero_grad()
-        loss.backward()
+        train_loss.backward()
         optimizer.step()
 
     running_loss /= num_total
     train_accuracy = (num_correct/num_total)*100
-    return running_loss, train_accuracy
+    return running_loss, train_accuracy, train_loss_detail
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ASVspoof2021 baseline system')
@@ -250,8 +263,8 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=args.weight_decay)
-    
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
     if args.model_path:
         model.load_state_dict(torch.load(args.model_path,map_location=device))
         print('Model loaded : {}'.format(args.model_path))
@@ -296,22 +309,28 @@ if __name__ == '__main__':
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    best_epoch = {'epoch': 0, 'val_loss': 1000000}
+    best_epoch = {'epoch': 0, 'val_loss': 100000}
     for epoch in range(num_epochs):
+        print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
-        running_loss, train_accuracy = train_epoch(train_loader, model, args.lr, optimizer, device, config)
-        val_loss, val_accuracy = evaluate_accuracy(dev_loader, model, device)
+        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.lr, optimizer, device, config)
+        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, model, device)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
         writer.add_scalar('val_loss', val_loss, epoch)
         writer.add_scalar('loss', running_loss, epoch)
+        for loss_name, loss in train_loss_detail.items():
+            writer.add_scalar('train_{}'.format(loss_name), loss, epoch)
+        for loss_name, loss in val_loss_detail.items():
+            writer.add_scalar('val_{}'.format(loss_name), loss, epoch)
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
+        scheduler.step()
         
         # Find the best model and save it
         if val_loss < best_epoch['val_loss']:
             # remove previous model
-            if (os.path.exists(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))):
-                os.remove(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))
+            # if (os.path.exists(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))):
+            #     os.remove(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))
             best_epoch['epoch'] = epoch
             best_epoch['val_loss'] = val_loss
         

@@ -120,18 +120,20 @@ class Model(nn.Module):
         # print("labels.shape", labels.shape)
         L_CE = self.loss_CE(output, labels)
         
-        # # reshape the feats to match the supcon loss format
-        # feats = feats.unsqueeze(1)
-        # # print("feats.shape", feats.shape)
-        # L_CF1 = n_views/real_bzs * supcon_loss(feats, labels=labels, contra_mode='one', sim_metric=self.sim_metric_seq)
+        # reshape the feats to match the supcon loss format
+        feats = feats.unsqueeze(1)
+        # print("feats.shape", feats.shape)
+        L_CF1 = n_views/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['contra_mode'], sim_metric=self.sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = n_views/real_bzs * supcon_loss(emb, labels=labels, contra_mode='all', sim_metric=self.sim_metric_seq)
-        
-        return L_CE + L_CF2
+        L_CF2 = n_views/real_bzs * supcon_loss(emb, labels=labels, contra_mode=config['contra_mode'], sim_metric=self.sim_metric_seq)
+        if config['loss_type'] == 1:
+            return L_CE + L_CF1 + L_CF2
+        elif config['loss_type'] == 2:
+            return L_CE + L_CF2
         
     
     def loss_function_(self, batch_size, anchor_name, anchor, positive, negative):

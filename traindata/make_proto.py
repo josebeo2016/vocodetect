@@ -215,6 +215,15 @@ def in_the_wild():
     
     protocol_in_the_wild.to_csv("protocol_in_the_wild.txt", columns=['path', 'subset', 'label'], sep=' ', index=False, header=False)
 
+def asvspoof_2021_df():
+    # ==================== #
+    # DF protocol
+    # ==================== #
+    protocol_df = pd.read_csv("/datab/Dataset/ASVspoof/LA/ASVspoof2021_DF_eval/keys/CM/trial_metadata.txt", sep=" ", header=None)
+    protocol_df.columns = ['spk','utt','a','b','c', 'label', 'd', 'subset']
+    protocol_df['path'] = "flac/" + protocol_df['utt'] + ".flac"
+    protocol_df.to_csv("asvspoof_2021_DF/protocol.txt", columns=['path', 'subset', 'label'], sep=' ', index=False, header=False)
+    
 def wavefake():
     # ==================== #
     # wavefake protocol
@@ -245,9 +254,10 @@ def wavefake():
 
 if __name__ == "__main__":
     # jul6()
-    jul11()
+    # jul11()
     # main_df()
     # main_tts()
     # fakeav()
     # in_the_wild()
     # wavefake()
+    asvspoof_2021_df()
