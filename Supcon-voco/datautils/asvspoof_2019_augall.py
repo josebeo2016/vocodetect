@@ -147,6 +147,14 @@ class Dataset_for_eval(Dataset):
         X_pad = pad(X,utt_id,self.cut)
         x_inp = Tensor(X_pad)
         return x_inp, utt_id
+    
+    def collate_fn(self, batch):
+        batch = [b[0] for b in batch]
+        # padding to same length as the max length in the batch
+        batch = torch.nn.utils.rnn.pad_sequence(batch, batch_first=True)
+        
+        batch = torch.stack(batch)
+        return batch
 
 
 #--------------RawBoost data augmentation algorithms---------------------------##

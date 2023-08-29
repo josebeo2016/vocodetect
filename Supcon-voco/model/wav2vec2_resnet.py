@@ -84,8 +84,10 @@ class Model(nn.Module):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
 
         x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
+        # print("x_ssl_feat.shape", x_ssl_feat.shape)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
+        # print("x.shape", x.shape)
         # post-processing on front-end features
         # x = x.transpose(1, 2)   #(bs,feat_out_dim,frame_number)
         x = x.unsqueeze(dim=1) # add channel 
@@ -93,7 +95,11 @@ class Model(nn.Module):
         x = self.first_bn(x)
         x = self.selu(x)
         # ResNet backend
+        # output [batch, 2]
+        # emb [batch, 256]
         output, emb = self.resnet(x)
+        # print("output.shape", output.shape)
+        # print("emb.shape", emb.shape)
         if (self.is_train):
             return output, feats, emb
         return output
@@ -124,19 +130,24 @@ class Model(nn.Module):
         # reshape the feats to match the supcon loss format
         feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        L_CF1 = n_views/real_bzs * supcon_loss(feats, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF1 = supcon_loss(feats, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = n_views/real_bzs * supcon_loss(emb, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF2 = supcon_loss(emb, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
         if self.loss_type == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
         elif self.loss_type == 2:
             return {'L_CE':L_CE, 'L_CF1':L_CF1}
         elif self.loss_type == 3:
             return {'L_CE':L_CE, 'L_CF2':L_CF2}
+        # ablation study
+        elif self.loss_type == 4:
+            return {'L_CE':L_CE}
+        elif self.loss_type == 5:
+            return {'L_CF1':L_CF1, 'L_CF2':L_CF2}
         
     
     

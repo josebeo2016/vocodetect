@@ -134,6 +134,8 @@ class Model(nn.Module):
         self.flag_fix_ssl = args['flag_fix_ssl']
         self.contra_mode = args['contra_mode']
         self.loss_type = args['loss_type']
+        self.K = args['K']
+        self.S = args['S']
         ####
         # create network wav2vec 2.0
         ####
@@ -180,27 +182,22 @@ class Model(nn.Module):
             return self._forward(x_big)
         
     
-    def loss_(self, output, feats, emb, labels, config):
+    def loss(self, output, feats, emb, labels, config):
         
         real_bzs = output.shape[0]
         n_views = 1.0
         
-        print("output.shape", output.shape)
-        print("labels.shape", labels.shape)
-        print("feats.shape", feats.shape)
-        print("emb.shape", emb.shape)
+        # print("output.shape", output.shape)
+        # print("labels.shape", labels.shape)
+        # print("feats.shape", feats.shape)
+        # print("emb.shape", emb.shape)
         L_CE = self.loss_CE(output, labels)
         
-        # reshape the feats to match the supcon loss format
-        feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        L_CF1 = n_views/real_bzs * supcon_loss(feats, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF1 = 1/real_bzs * loss_SCL(feats, K=self.K, S=self.S)
         
-        # reshape the emb to match the supcon loss format
-        emb = emb.unsqueeze(1)
-        emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = n_views/real_bzs * supcon_loss(emb, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF2 = 1/real_bzs * loss_SCL(emb, K=self.K, S=self.S)
         if self.loss_type == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
         elif self.loss_type == 2:
@@ -208,30 +205,66 @@ class Model(nn.Module):
         elif self.loss_type == 3:
             return {'L_CE':L_CE, 'L_CF2':L_CF2}
         
-    def custom_loss(self, anchor, positive_samples, vocoded_samples):
-        # anchor # size: [1, ...]
+def sim_metric_seq(mat1, mat2):
+    if len(mat1.shape) == 2:
+        mat1 = mat1.unsqueeze(-1)
+        mat2 = mat2.unsqueeze(-1)
+    return torch.bmm(mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
+def loss_SCL(batch, K, S, t=0.07):
+    """
+    Computes the loss based on the given input batch, K, and S.
 
-        Pi = positive_samples # size: [K, ...]
-        Vi = vocoded_samples  # size: [S, ...]
+    Args:
+    - batch (torch.Tensor): Input batch tensor of shape [1 + K + M + S, H ...]
+    - K (int): Number of augmented samples
+    - S (int): Number of negative samples
 
-        # Combine all in one tensor for efficiency. Shape: [1 + K + S, H ...]
-        all_samples = torch.cat([anchor, Pi, Vi], dim=0)
+    Returns:
+    - loss (torch.Tensor): Computed loss value
+    """
+    bsz = batch.shape[0]  # Get batch size
+    device = batch.device  # Get device
 
-        # Compute distances. Shape: [N, K + S + 1, K + S + 1]
-        distances = self.f(all_samples, all_samples)
-
-        # Compute unnormalized probabilities.
-        exp_distances = distances.exp()
-
-        # Compute partition function (normalizing constant). Shape: [K + S + 1, H ...]
-        Z = exp_distances.sum(dim=-1) - torch.diagonal(exp_distances, dim1=1, dim2=2)
-
-        # Compute per-example losses for positives and negatives.
-        # Shape of both: [N]
-        positive_losses = -torch.log((exp_distances[:, 0, 1:1 + K] / Z[:, 0]).clamp(min=1e-7)).mean(dim=-1)
-        negative_losses = -torch.log((exp_distances[:, 1 + K:, 1 + K:] / Z[:, 1 + K:].unsqueeze(1)).clamp(min=1e-7)).mean(dim=-1)
-
-        return (positive_losses + negative_losses).mean()
+    M = len(batch) - 1 - K - S  # Calculate the number of other real samples
+    remove_rows = list(range(bsz))
+    remove_rows[1:1+K+M] = [] # positive sample rows
     
-    def f(self, x, y):
-        return cosine_similarity(x, y)
+    logits_mat = sim_metric_seq(batch, batch)
+    # print("logits_mat\n", logits_mat)
+    logits_mat = logits_mat[remove_rows]
+    self_mask = torch.ones((bsz,bsz))
+    self_mask.diagonal().fill_(0) # mask on each data itself
+    self_mask[:,0].fill_(0) # no need to compute the loss of the anchor
+    self_mask = self_mask[remove_rows]
+    # print("self_mask\n",self_mask)
+    self_mask = self_mask.to(device)
+    # Numerous stability improvements
+    logits_max, _ = torch.max(logits_mat * self_mask, dim=1, keepdim=True)
+    logits_mat_ = logits_mat - logits_max.detach()
+    # compute log_prob
+    exp_logits = torch.exp(logits_mat_ * self_mask) * self_mask
+    # divide by the sum of exp_logits along the row
+    log_prob = logits_mat_ - torch.log(exp_logits.sum(1, keepdim=True))
+    # print("log_prob\n", log_prob)
+    
+    mask_ = torch.ones((bsz,bsz))
+    mask_.diagonal().fill_(0) 
+    # mask_[1:1+K+M,:].fill_(0) # mask on augmented and positive samples
+    mask_[0,1+K+M:].fill_(0) # mask on anchor to negative samples
+    mask_[1+K+M:,1:1+K+M].fill_(0) # mask on negative samples to augmented and positive samples
+    mask_ = mask_.to(device)
+    
+    # print("remove_rows", remove_rows)   
+    
+    mask_ = mask_[remove_rows]
+    # log_prob = log_prob[remove_rows]
+    # print("mask_\n", mask_)
+    
+    mean_log_prob_pos = (mask_ * log_prob).sum(1) / mask_.sum(1)
+    # print("mean_log_prob_pos.shape", mean_log_prob_pos.shape)
+    # print(mean_log_prob_pos)
+    # loss
+    loss = - mean_log_prob_pos
+    loss = loss.mean()
+
+    return loss

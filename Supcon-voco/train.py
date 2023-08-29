@@ -13,15 +13,40 @@ from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
 from model.wav2vec2_linear import Model as wav2vec2_linear
 from model.wav2vec2_linear_phucdt import Model as wav2vec2_linear_phucdt  
+from model.wav2vec2_linear_nll import Model as wav2vec2_linear_nll
+from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
 import importlib
+import time
 from tensorboardX import SummaryWriter
 
 
 __author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
 
+class EarlyStop:
+    def __init__(self, patience=5, delta=0, init_best=60, save_dir=''):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = init_best
+        self.counter = 0
+        self.early_stop = False
+        self.save_dir = save_dir
 
-
+    def __call__(self, score, model, epoch):
+        if self.best_score is None:
+            self.best_score = score
+        elif score > self.best_score + self.delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            print("Best epoch: {}".format(epoch))
+            self.best_score = score
+            self.counter = 0
+            # save model here
+            torch.save(model.state_dict(), os.path.join(
+                self.save_dir, 'epoch_{}.pth'.format(epoch)))
+            
 def evaluate_accuracy(dev_loader, model, device):
     val_loss = 0.0
     val_loss_detail = {}
@@ -286,7 +311,8 @@ if __name__ == '__main__':
     
     print('no. of training trials',len(file_train))
     
-    train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, base_dir = args.database_path+'/',algo=args.algo, **config['data']['kwargs'])
+    train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, 
+        base_dir = args.database_path+'/',algo=args.algo, **config['data']['kwargs'])
     
     train_loader = DataLoader(train_set, batch_size=args.batch_size,num_workers=8, shuffle=True,drop_last = True)
     
@@ -299,9 +325,8 @@ if __name__ == '__main__':
     
     print('no. of validation trials',len(file_dev))
     
-    dev_set = Dataset_for(args,list_IDs = file_dev,
-		labels = d_label_dev,
-		base_dir = args.database_path+'/',algo=args.algo)
+    dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
+		base_dir = args.database_path+'/',algo=args.algo, **config['data']['kwargs'])
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
@@ -309,7 +334,8 @@ if __name__ == '__main__':
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    best_epoch = {'epoch': 0, 'val_loss': 100000}
+    early_stopping = EarlyStop(patience=20, delta=0, init_best=0.4, save_dir=model_save_path)
+    start_train_time = time.time()
     for epoch in range(num_epochs):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
@@ -325,15 +351,10 @@ if __name__ == '__main__':
             writer.add_scalar('val_{}'.format(loss_name), loss, epoch)
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
         scheduler.step()
+        # check early stopping
+        early_stopping(val_loss, model, epoch)
+        if early_stopping.early_stop:
+            print("Early stopping activated.")
+            break
         
-        # Find the best model and save it
-        if val_loss < best_epoch['val_loss']:
-            # remove previous model
-            # if (os.path.exists(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))):
-            #     os.remove(os.path.join(model_save_path, 'epoch_{}.pth'.format(best_epoch['epoch'])))
-            best_epoch['epoch'] = epoch
-            best_epoch['val_loss'] = val_loss
-        
-        if best_epoch['epoch'] == epoch:
-            torch.save(model.state_dict(), os.path.join(
-                model_save_path, 'epoch_{}.pth'.format(epoch)))
+    print("Total training time: {}s".format(time.time() - start_train_time))

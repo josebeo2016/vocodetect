@@ -35,18 +35,18 @@ def genList(dir_meta, is_train=False, is_eval=True, is_dev=False):
         return [], file_list
 
 
-def pad(x, utt_id, max_len=64600):
+def pad(x, padding_type, max_len=64600):
     x_len = x.shape[0]
     if x_len >= max_len:
         return x[:max_len]
-    if x_len < 1:
-        logging.error("file {} has 0 size".format(utt_id))
-        exit(0)
-
     # need to pad
-    num_repeats = int(max_len / x_len)+1
-    padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
-    return padded_x	
+    if padding_type == "repeat":
+        num_repeats = int(max_len / x_len)+1
+        padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
+    elif padding_type == "zero":
+        padded_x = np.zeros(max_len)
+        padded_x[:x_len] = x
+    return padded_x
 			
 class Dataset_for(Dataset):
     def __init__(self,args,list_IDs, labels, base_dir, algo):
@@ -83,7 +83,7 @@ class Dataset_for_eval(Dataset):
             
         utt_id = self.list_IDs[index]
         X, fs = librosa.load(self.base_dir + "/" + utt_id, sr=16000)
-        X_pad = pad(X,utt_id,self.cut)
+        X_pad = pad(X,"zero",self.cut)
         x_inp = Tensor(X_pad)
         return x_inp, utt_id
 

@@ -82,9 +82,10 @@ def neg_energy_reg_loss(energy, margin_in, margin_out, flag_in):
 #####################
 # supervised contrastive loss [2]
 #####################
-
+def sim_metric_seq(mat1, mat2):
+    return torch.bmm(mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
 def supcon_loss(input_feat, 
-               labels = None, mask = None, sim_metric = None, 
+               labels = None, mask = None, sim_metric = sim_metric_seq, 
                t=0.07, contra_mode='all', length_norm=False):
     """
     loss = SupConLoss(feat, 
@@ -150,7 +151,6 @@ def supcon_loss(input_feat,
     # prepare feature matrix
     # -> (num_view * batch, feature_dim, ...)
     contrast_feature = torch.cat(torch.unbind(feat, dim=1), dim=0)
-    
     # 
     if contra_mode == 'one':
         # (batch, feat_dim, ...)
@@ -173,6 +173,7 @@ def supcon_loss(input_feat,
         logits_mat = torch.div(
             torch.matmul(anchor_feature, contrast_feature.T), t)
     
+    # print(anchor_feature.shape)
     # mask based on the label
     # -> same shape as logits_mat 
     mask_ = mask.repeat(anchor_count, nv)
@@ -181,23 +182,26 @@ def supcon_loss(input_feat,
         torch.ones_like(mask_), 1, 
         torch.arange(bs * anchor_count).view(-1, 1).to(dc), 
         0)
-    
+    # print(self_mask)
     # 
     mask_ = mask_ * self_mask
+    # print(mask_)
     
     # for numerical stability, remove the max from logits
     # see https://en.wikipedia.org/wiki/LogSumExp trick
     # for numerical stability
     logits_max, _ = torch.max(logits_mat * self_mask, dim=1, keepdim=True)
     logits_mat_ = logits_mat - logits_max.detach()
-
     # compute log_prob
     exp_logits = torch.exp(logits_mat_ * self_mask) * self_mask
     log_prob = logits_mat_ - torch.log(exp_logits.sum(1, keepdim=True))
 
+    # print("log_prob.shape", log_prob.shape)
     # compute mean of log-likelihood over positive
+    # print(mask_ * log_prob)
     mean_log_prob_pos = (mask_ * log_prob).sum(1) / mask_.sum(1)
-
+    # print("mean_log_prob_pos.shape", mean_log_prob_pos.shape)
+    # print(mean_log_prob_pos)
     # loss
     loss = - mean_log_prob_pos
     loss = loss.view(anchor_count, bs).mean()
