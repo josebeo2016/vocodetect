@@ -13,13 +13,14 @@ from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
 from model.wav2vec2_linear import Model as wav2vec2_linear
 from model.wav2vec2_linear_phucdt import Model as wav2vec2_linear_phucdt  
+from model.wav2vec2_linear_nll import Model as wav2vec2_linear_nll
+from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
 import importlib
 import time
 from tensorboardX import SummaryWriter
 
-
-__author__ = "Hemlata Tak"
-__email__ = "tak@eurecom.fr"
+__author__ = "PhucDT"
+__reference__ = "Hemlata Tak"
 
 class EarlyStop:
     def __init__(self, patience=5, delta=0, init_best=60, save_dir=''):
@@ -268,8 +269,8 @@ if __name__ == '__main__':
         os.mkdir(model_save_path)
     
     #GPU device
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'                  
-    print('Device: {}'.format(device))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')                
+    print("Number of GPUs available: ", torch.cuda.device_count())
     
     # load config file
     config = yaml.load(open(args.config, 'r'), Loader=yaml.FullLoader)
@@ -291,6 +292,9 @@ if __name__ == '__main__':
     if args.model_path:
         model.load_state_dict(torch.load(args.model_path,map_location=device))
         print('Model loaded : {}'.format(args.model_path))
+        
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
         
     #evaluation 
     if args.eval:

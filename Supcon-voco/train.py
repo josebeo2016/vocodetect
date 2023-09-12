@@ -19,9 +19,8 @@ import importlib
 import time
 from tensorboardX import SummaryWriter
 
-
-__author__ = "Hemlata Tak"
-__email__ = "tak@eurecom.fr"
+__author__ = "PhucDT"
+__reference__ = "Hemlata Tak"
 
 class EarlyStop:
     def __init__(self, patience=5, delta=0, init_best=60, save_dir=''):
@@ -53,6 +52,7 @@ def evaluate_accuracy(dev_loader, model, device):
     num_total = 0.0
     num_correct = 0.0
     model.eval()
+    model.is_train = False
     for info, batch_x, batch_y in dev_loader:
         loss_value = 0.0
         # print("Validating on anchor: ", info)
@@ -81,6 +81,7 @@ def produce_prediction_file(dataset, model, device, save_path):
     num_correct = 0.0
     num_total = 0.0
     model.eval()
+    model.is_train = False
     
     fname_list = []
     key_list = []
@@ -332,6 +333,7 @@ if __name__ == '__main__':
 
     
     # Training and validation 
+    model.is_train = True
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
     early_stopping = EarlyStop(patience=20, delta=0, init_best=0.4, save_dir=model_save_path)

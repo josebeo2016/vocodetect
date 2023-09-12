@@ -11,11 +11,15 @@ fbank: # this is used for wav2mel.py
 
 
 vocoder:
-  type: MelGAN # choose one of the following
+  type: WaveRNN # choose one of the following
   MelGAN:
     checkpoint: checkpoints/melgan/melgan_ljspeech.pth
     config: checkpoints/melgan/default.yaml
     device: cuda:1
+  WaveRNN:
+    checkpoint: checkpoints/wavernn/latest_weights.pyt
+    device: cuda:3
+    config: checkpoints/wavernn/hparams.py
   VocGan:
     checkpoint: checkpoints/vctk_pretrained_model_3180.pt #~/checkpoints/ljspeech_29de09d_4000.pt
     denoise: True
@@ -30,4 +34,4 @@ vocoder:
     device: cuda:2 #try cpu if out of memory
 
 synthesis:
-  normalize: True # normalize the sound volume
+  normalize: False # normalize the sound volume

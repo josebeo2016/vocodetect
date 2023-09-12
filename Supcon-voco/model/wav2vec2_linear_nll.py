@@ -9,6 +9,7 @@ from torch import Tensor
 import fairseq
 import os
 from model.loss_metrics import supcon_loss
+from .xlsr import SSLModel
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
@@ -17,40 +18,7 @@ __email__ = "tak@eurecom.fr"
 ## FOR fine-tuned SSL MODEL
 ############################
 
-BASE_DIR=os.path.dirname(os.path.abspath(__file__))
 
-class SSLModel(nn.Module):
-    def __init__(self,device):
-        super(SSLModel, self).__init__()
-        
-        cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')
-        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
-        self.model = model[0]
-        self.device=device
-
-        self.out_dim = 1024
-        return
-
-    def extract_feat(self, input_data):
-        
-        # put the model to GPU if it not there
-        if next(self.model.parameters()).device != input_data.device \
-           or next(self.model.parameters()).dtype != input_data.dtype:
-            self.model.to(input_data.device, dtype=input_data.dtype)
-            self.model.train()
-
-        
-        if True:
-            # input should be in shape (batch, length)
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-                
-            # [batch, length, dim]
-            emb = self.model(input_tmp, mask=False, features_only=True)['x']
-            # print(emb.shape)
-        return emb
 class DropoutForMC(nn.Module):
     """Dropout layer for Bayesian model
     THe difference is that we do dropout even in eval stage
@@ -86,15 +54,19 @@ class BackEnd(nn.Module):
         self.m_frame_level = nn.Sequential(
             nn.Linear(self.in_dim, self.in_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
             nn.Linear(self.in_dim, self.in_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
             nn.Linear(self.in_dim, self.out_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
+            torch.nn.Dropout(self.m_mcdp_rate)
+        )
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
 
         # linear layer to produce output logits 
         self.m_utt_level = nn.Linear(self.out_dim, self.num_class)
@@ -144,7 +116,7 @@ class Model(nn.Module):
         self.selu = nn.SELU(inplace=True)
         
         self.loss_CE = nn.CrossEntropyLoss()
-        self.backend = BackEnd(128, 128, 2, 0.5, True)
+        self.backend = BackEnd(128, 128, 2, 0.5, False)
         
         self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
             mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
@@ -153,7 +125,7 @@ class Model(nn.Module):
     def _forward(self, x):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
 
-        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
+        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
         x = nn.ReLU()(x)

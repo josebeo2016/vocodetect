@@ -75,8 +75,8 @@ if __name__ == '__main__':
         wav = librosa.resample(wav, orig_sr=sr, target_sr=16000)
         if config['synthesis']['normalize']:
             wav = normalize(wav)
-        else:
-            wav = to_int16(wav)
+        # else:
+        #     wav = to_int16(wav)
         dst_file = os.path.join(out_dir, f'{id}.wav')
 
         # logging.info(f'writing file to {dst_file}')
