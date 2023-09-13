@@ -11,12 +11,13 @@ import yaml
 from model.wav2vec2_resnet import Model as wav2vec2_resnet
 from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
-from model.wav2vec2_linear import Model as wav2vec2_linear
-from model.wav2vec2_linear_phucdt import Model as wav2vec2_linear_phucdt  
-from model.wav2vec2_linear_nll import Model as wav2vec2_linear_nll
+from model.wav2vec2_linear import Model as wav2vec2_linear 
+from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
 from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
 import importlib
 import time
+
+from model.loss_metrics import loss_custom
 from tensorboardX import SummaryWriter
 
 __author__ = "PhucDT"
@@ -45,7 +46,39 @@ class EarlyStop:
             # save model here
             torch.save(model.state_dict(), os.path.join(
                 self.save_dir, 'epoch_{}.pth'.format(epoch)))
+def train_epoch(train_loader, model, lr, optimizer, device, config):
+    model.train() 
+    running_loss = 0.0
+    num_correct = 0.0
+    num_total = 0.0
+    train_loss_detail = {}
+    for info, batch_x, batch_y in train_loader:
+        train_loss = 0.0
+        # print("training on anchor: ", info)
+        num_total +=batch_x.shape[2]
+        batch_x = batch_x.to(device)
+        batch_x = batch_x.squeeze(0).transpose(0,1)
+        # print("batch_y.shape", batch_y.shape)
+        batch_y = batch_y.view(-1).type(torch.int64).to(device)
+        batch_out, batch_feat, batch_emb = model(batch_x)
+        losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+        for key, value in losses.items():
+            train_loss += value
+            train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()
             
+        running_loss+=train_loss.item()
+        _, batch_pred = batch_out.max(dim=1)
+        # batch_y = batch_y.view(-1)
+        num_correct += (batch_pred == batch_y).sum(dim=0).item()
+        
+        optimizer.zero_grad()
+        train_loss.backward()
+        optimizer.step()
+
+    running_loss /= num_total
+    train_accuracy = (num_correct/num_total)*100
+    return running_loss, train_accuracy, train_loss_detail
+
 def evaluate_accuracy(dev_loader, model, device):
     val_loss = 0.0
     val_loss_detail = {}
@@ -58,13 +91,14 @@ def evaluate_accuracy(dev_loader, model, device):
         # print("batch_x.shape", batch_x.shape)
         num_total +=batch_x.shape[2]
         batch_x = batch_x.to(device)
-
+        batch_x = batch_x.squeeze(0).transpose(0,1)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
+        
         batch_out, batch_feat, batch_emb = model(batch_x)
-        losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
+        losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
         for key, value in losses.items():
             loss_value += value
-            val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()/num_total
+            val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()
         val_loss+=loss_value.item()
         _, batch_pred = batch_out.max(dim=1)
         num_correct += (batch_pred == batch_y).sum(dim=0).item()
@@ -141,37 +175,7 @@ def produce_evaluation_file(dataset, model, device, save_path):
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-def train_epoch(train_loader, model, lr, optimizer, device, config):
-    model.train() 
-    running_loss = 0.0
-    num_correct = 0.0
-    num_total = 0.0
-    train_loss_detail = {}
-    for info, batch_x, batch_y in train_loader:
-        train_loss = 0.0
-        # print("training on anchor: ", info)
-        # print("batch_x.shape", batch_x.shape)
-        num_total +=batch_x.shape[2]
-        batch_x = batch_x.to(device)
 
-        batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        batch_out, batch_feat, batch_emb = model(batch_x)
-        losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
-        for key, value in losses.items():
-            train_loss += value
-            train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()/num_total
-            
-        running_loss+=train_loss.item()
-        _, batch_pred = batch_out.max(dim=1)
-        num_correct += (batch_pred == batch_y).sum(dim=0).item()
-        
-        optimizer.zero_grad()
-        train_loss.backward()
-        optimizer.step()
-
-    running_loss /= num_total
-    train_accuracy = (num_correct/num_total)*100
-    return running_loss, train_accuracy, train_loss_detail
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ASVspoof2021 baseline system')

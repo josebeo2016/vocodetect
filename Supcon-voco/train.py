@@ -161,7 +161,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
         for key, value in losses.items():
             train_loss += value
-            train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()/num_total
+            train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()/batch_x.shape[2]
             
         running_loss+=train_loss.item()
         _, batch_pred = batch_out.max(dim=1)
