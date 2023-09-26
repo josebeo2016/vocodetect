@@ -46,6 +46,7 @@ class EarlyStop:
             # save model here
             torch.save(model.state_dict(), os.path.join(
                 self.save_dir, 'epoch_{}.pth'.format(epoch)))
+
 def train_epoch(train_loader, model, lr, optimizer, device, config):
     model.train() 
     running_loss = 0.0
@@ -108,47 +109,12 @@ def evaluate_accuracy(dev_loader, model, device):
    
     return val_loss, val_accuracy, val_loss_detail
 
-
-def produce_prediction_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
+def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0
     model.eval()
-    
-    fname_list = []
-    key_list = []
-    score_list = []
-    
-    for batch_x, utt_id in data_loader:
-        fname_list = []
-        score_list = []  
-        batch_size = batch_x.size(0)
-        batch_x = batch_x.to(device)
-        
-        batch_out = model(batch_x)
-        
-        batch_score = (batch_out[:, 1]  
-                       ).data.cpu().numpy().ravel() 
-        _, batch_pred = batch_out.max(dim=1)
 
-        # add outputs
-        fname_list.extend(utt_id)
-        score_list.extend(batch_pred.tolist())
-        
-        with open(save_path, 'a+') as fh:
-            for f, cm in zip(fname_list,score_list):
-                fh.write('{} {}\n'.format(f, cm))
-        fh.close()   
-    print('Scores saved to {}'.format(save_path))
-
-def produce_evaluation_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
-    num_correct = 0.0
-    num_total = 0.0
-    model.eval()
-    # set to inference mode
-    model.is_train = False
-    
     fname_list = []
     key_list = []
     score_list = []
@@ -160,7 +126,7 @@ def produce_evaluation_file(dataset, model, device, save_path):
         batch_size = batch_x.size(0)
         batch_x = batch_x.to(device)
         
-        batch_out = model(batch_x)
+        batch_out, _, _ = model(batch_x)
         batch_score = (batch_out[:, 1]  
                        ).data.cpu().numpy().ravel() 
         _,batch_pred = batch_out.max(dim=1)
@@ -293,12 +259,14 @@ if __name__ == '__main__':
     #set Adam optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
+    
+    # set device for multi-gpu model
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    # load state dict
     if args.model_path:
         model.load_state_dict(torch.load(args.model_path,map_location=device))
         print('Model loaded : {}'.format(args.model_path))
-        
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
         
     #evaluation 
     if args.eval:
@@ -308,7 +276,7 @@ if __name__ == '__main__':
         if (args.predict):
             produce_prediction_file(eval_set, model, device, args.eval_output)
         else:
-            produce_evaluation_file(eval_set, model, device, args.eval_output)
+            produce_evaluation_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         sys.exit(0)
    
      
@@ -340,7 +308,7 @@ if __name__ == '__main__':
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    early_stopping = EarlyStop(patience=10, delta=0.001, init_best=0.1, save_dir=model_save_path)
+    early_stopping = EarlyStop(patience=10, delta=0, init_best=0.2, save_dir=model_save_path)
     start_train_time = time.time()
     for epoch in range(num_epochs):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))

@@ -97,15 +97,16 @@ def produce_prediction_file(dataset, model, device, save_path):
         
         batch_score = (batch_out[:, 1]  
                        ).data.cpu().numpy().ravel() 
+
         _, batch_pred = batch_out.max(dim=1)
 
         # add outputs
         fname_list.extend(utt_id)
-        score_list.extend(batch_pred.tolist())
+        score_list.extend(batch_out.data.cpu().numpy().tolist())
         
         with open(save_path, 'a+') as fh:
             for f, cm in zip(fname_list,score_list):
-                fh.write('{} {}\n'.format(f, cm))
+                fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 

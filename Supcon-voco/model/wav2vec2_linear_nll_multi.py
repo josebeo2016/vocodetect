@@ -139,7 +139,6 @@ class Model(nn.Module):
         return output
     
     def forward(self, x_big):
-       
         # make labels to be a tensor of [bz]
         # labels = labels.squeeze(0)
 
@@ -153,6 +152,7 @@ class Model(nn.Module):
         else:
             # in inference mode, we don't need the emb
             # the x_big now is a tensor of [bz, length]
+            print("Inference mode")
             
             return self._forward(x_big)
         

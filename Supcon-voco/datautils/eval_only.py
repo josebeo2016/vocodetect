@@ -30,7 +30,7 @@ def genList(dir_meta, is_train=False, is_eval=True, is_dev=False):
     
     if (is_eval):
         for line in l_meta:
-            key, subset, label = line.strip().split()
+            key = line.strip().split()[0]
             file_list.append(key)
         return [], file_list
 
