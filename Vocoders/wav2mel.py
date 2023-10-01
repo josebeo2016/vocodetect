@@ -61,7 +61,10 @@ if __name__ == '__main__':
     # Create all folders
     # os.makedirs(mel_path, exist_ok=True)
     for wavpath in tqdm.tqdm(wav_files, desc='preprocess wav to mel'):
-        wav,sr = librosa.load(wavpath,sr=config['fbank']['sample_rate'],res_type=args.resample_mode)
+        # load wav file with librosa
+        # conver mono channel
+        # resample to config setting
+        wav,sr = librosa.load(wavpath,sr=config['fbank']['sample_rate'],res_type=args.resample_mode, mono=True)
         # normalize
         wav = librosa.util.normalize(wav)
         wav = torch.from_numpy(wav).unsqueeze(0)

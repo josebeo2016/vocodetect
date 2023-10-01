@@ -30,15 +30,13 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     if (is_train):
         for line in l_meta:
             key = line.strip().split()
-            if ("LA_T" in key[0]):
-                file_list.append(key[0])
+            file_list.append(key[0])
         return [],file_list
     
     if (is_dev):
         for line in l_meta:
             key = line.strip().split()
-            if ("LA_D" in key[0]):
-                file_list.append(key[0])
+            file_list.append(key[0])
         return [],file_list
     
     elif(is_eval):

@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import argparse
 import random
+import glob 
 
 def recursive_list_files(path, file_extension=".wav"):
     """Recursively lists all files in a directory and its subdirectories"""
@@ -252,6 +253,99 @@ def wavefake():
     # save
     protocol.to_csv("protocol_wavefake.txt", columns=['path', 'subset', 'label'], sep=' ', index=False, header=False)
 
+
+def supcon_cnsl_sep30():
+    rate = 0.5
+    dataset_dir = '/datab/Dataset/cnsl_real_fake_audio/supcon_cnsl_sep30'
+    bonafide_dir = os.path.join(dataset_dir,'bonafide')
+    eval_dir = os.path.join(dataset_dir,'eval')
+    scp_dir = os.path.join(dataset_dir,'scp')
+    vocoded_dir = os.path.join(dataset_dir,'vocoded')
+    
+    # ==================== #
+    # bonafide from la2019 (train dev)
+    # ==================== #
+    la2019_bona_dir = '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/bonafide'
+    # list all file in la2019_bona_dir
+    la2019_bona_files = glob.glob(la2019_bona_dir+"/*.wav")
+    la2019_bona_files = [os.path.basename(file) for file in la2019_bona_files]
+    # write list to tmp file
+    with open(os.path.join(scp_dir, '/tmp/tmp.txt'), 'w') as f:
+        for file in la2019_bona_files:
+            f.write(file+'\n')
+    # softlink all files from la2019_bona_dir to bonafide_dir
+    os.system("rsync -a --files-from='/tmp/tmp.txt' --info=progress2 "+ la2019_bona_dir+ " " +bonafide_dir)
+    
+
+    # ==================== #
+    # vocoded from la2019 (train dev)
+    # ==================== #
+    la2019_voco_dir = '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/vocoded'
+    # list all file in la2019_voco_dir
+    la2019_voco_files = glob.glob(la2019_voco_dir+"/*.wav")
+    la2019_voco_files = [os.path.basename(file) for file in la2019_voco_files]
+    # write list to tmp file
+    with open(os.path.join(scp_dir, '/tmp/tmp.txt'), 'w') as f:
+        for file in la2019_voco_files:
+            f.write(file+'\n')
+    # softlink all files from la2019_voco_dir to vocoded_dir
+    os.system("rsync -a --files-from='/tmp/tmp.txt' --info=progress2 "+la2019_voco_dir+" "+vocoded_dir)
+    
+        
+    # ==================== #
+    # bonafide from CNSL_intern
+    # ==================== #
+    cnsl_bona_dir = '/datab/Dataset/CNSL_intern/norm'
+    # list all file in cnsl_bona_dir
+    cnsl_bona_files = glob.glob(cnsl_bona_dir+"/*.wav")
+    cnsl_bona_files = [os.path.basename(file) for file in cnsl_bona_files]
+    # write list to tmp file
+    with open(os.path.join(scp_dir, '/tmp/tmp.txt'), 'w') as f:
+        for file in cnsl_bona_files:
+            f.write(file+'\n')
+    # softlink all files from cnsl_bona_dir to bonafide_dir
+    os.system("rsync -a --files-from='/tmp/tmp.txt' --info=progress2 "+cnsl_bona_dir+" "+bonafide_dir)
+    
+    
+    # ==================== #
+    # vocoded from CNSL_intern
+    # ==================== #
+    cnsl_voco_dir = '/datab/Dataset/CNSL_intern/vocoded'
+    # list all file in cnsl_voco_dir
+    cnsl_voco_files = glob.glob(cnsl_voco_dir+"/*.wav")
+    cnsl_voco_files = [os.path.basename(file) for file in cnsl_voco_files]
+    # write list to tmp file
+    with open(os.path.join(scp_dir, '/tmp/tmp.txt'), 'w') as f:
+        for file in cnsl_voco_files:
+            f.write(file+'\n')
+    # softlink all files from cnsl_voco_dir to vocoded_dir
+    os.system("rsync -a --files-from='/tmp/tmp.txt' --info=progress2 "+cnsl_voco_dir+" "+vocoded_dir)
+    
+    
+    # ==================== #
+    # make scp train_bonafide.lst
+    # ==================== #
+    
+    # mix la2019_bona and cnsl_bona
+    bonafide_files = la2019_bona_files + cnsl_bona_files
+    # shuffle
+    random.shuffle(bonafide_files)
+    # split train and dev
+    bonafide_train = bonafide_files[:int(len(bonafide_files)*rate)]
+    bonafide_dev = bonafide_files[int(len(bonafide_files)*rate):]
+    
+    # write lst file
+    with open(os.path.join(scp_dir, 'train_bonafide.lst'), 'w') as f:
+        for file in bonafide_train:
+            f.write(file+'\n')
+    with open(os.path.join(scp_dir, 'dev_bonafide.lst'), 'w') as f:
+        for file in bonafide_dev:
+            f.write(file+'\n')
+            
+    
+    
+    
+
 if __name__ == "__main__":
     # jul6()
     # jul11()
@@ -260,4 +354,5 @@ if __name__ == "__main__":
     # fakeav()
     # in_the_wild()
     # wavefake()
-    asvspoof_2021_df()
+    # asvspoof_2021_df()
+    supcon_cnsl_sep30()

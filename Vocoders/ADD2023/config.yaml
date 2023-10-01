@@ -11,7 +11,7 @@ fbank: # this is used for wav2mel.py
 
 
 vocoder:
-  type: WaveRNN # choose one of the following
+  type: HiFiGAN # choose one of the following
   MelGAN:
     checkpoint: checkpoints/melgan/melgan_ljspeech.pth
     config: checkpoints/melgan/default.yaml
