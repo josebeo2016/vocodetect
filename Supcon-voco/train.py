@@ -52,7 +52,7 @@ def evaluate_accuracy(dev_loader, model, device):
     num_total = 0.0
     num_correct = 0.0
     model.eval()
-    model.is_train = False
+    # model.is_train = False
     for info, batch_x, batch_y in dev_loader:
         loss_value = 0.0
         # print("Validating on anchor: ", info)
