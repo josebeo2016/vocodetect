@@ -76,7 +76,7 @@ def evaluate_accuracy(dev_loader, model, device):
     return val_loss, val_accuracy, val_loss_detail
 
 
-def produce_prediction_file(dataset, model, device, save_path):
+def produce_evaluation_file(dataset, model, device, save_path):
     data_loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0
@@ -110,7 +110,7 @@ def produce_prediction_file(dataset, model, device, save_path):
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-def produce_evaluation_file(dataset, model, device, save_path):
+def produce_prediction_file(dataset, model, device, save_path):
     data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0

@@ -130,6 +130,40 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
         batch_score = (batch_out[:, 1]  
                        ).data.cpu().numpy().ravel() 
         _,batch_pred = batch_out.max(dim=1)
+        
+        # add outputs
+        fname_list.extend(utt_id)
+        score_list.extend(batch_out.data.cpu().numpy().tolist())
+        
+        with open(save_path, 'a+') as fh:
+            for f, cm in zip(fname_list,score_list):
+                fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
+        fh.close()   
+    print('Scores saved to {}'.format(save_path))
+
+def produce_prediction_file(dataset, model, device, save_path):
+    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
+    num_correct = 0.0
+    num_total = 0.0
+    model.eval()
+    # set to inference mode
+    model.is_train = False
+    
+    fname_list = []
+    key_list = []
+    score_list = []
+    
+    for batch_x, utt_id in data_loader:
+        fname_list = []
+        score_list = []  
+        pred_list = []
+        batch_size = batch_x.size(0)
+        batch_x = batch_x.to(device)
+        
+        batch_out = model(batch_x)
+        batch_score = (batch_out[:, 1]  
+                       ).data.cpu().numpy().ravel() 
+        _,batch_pred = batch_out.max(dim=1)
         # add outputs
         fname_list.extend(utt_id)
         score_list.extend(batch_score.tolist())
@@ -140,8 +174,6 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
                 fh.write('{} {} {}\n'.format(f, cm, pred))
         fh.close()   
     print('Scores saved to {}'.format(save_path))
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='ASVspoof2021 baseline system')
@@ -261,8 +293,9 @@ if __name__ == '__main__':
     scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
     
     # set device for multi-gpu model
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() >= 1:
         model = nn.DataParallel(model)
+        
     # load state dict
     if args.model_path:
         model.load_state_dict(torch.load(args.model_path,map_location=device))
