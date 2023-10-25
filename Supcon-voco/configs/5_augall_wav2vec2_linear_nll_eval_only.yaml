@@ -9,11 +9,12 @@ model:
     resnet_type: '18'
     nclasses: 2
 data:
-  name: 'asvspoof_2019_augall_3'
+  name: 'eval_only'
   kwargs:
     vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
-    augmentation_methods: ["RawBoost12", "background_noise_wrapper", "reverb_wrapper"]
-    num_additional_real: 2
+    augmentation_methods: ["RawBoost12", "background_noise_wrapper", "reverb_wrapper", "speed_wrapper", "pitch_wrapper"]
+    num_additional_real: 1
+    num_additional_spoof: 1
     trim_length: 64000
     wav_samp_rate: 16000
     online_aug: true
