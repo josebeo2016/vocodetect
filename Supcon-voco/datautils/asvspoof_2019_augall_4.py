@@ -30,13 +30,15 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     if (is_train):
         for line in l_meta:
             key = line.strip().split()
-            file_list.append(key[0])
+            if ("LA_T" in key[0]):
+                file_list.append(key[0])
         return [],file_list
     
     if (is_dev):
         for line in l_meta:
             key = line.strip().split()
-            file_list.append(key[0])
+            if ("LA_D" in key[0]):
+                file_list.append(key[0])
         return [],file_list
     
     elif(is_eval):
@@ -109,10 +111,9 @@ class Dataset_for(Dataset):
         for vf in vocoded_audio_files:
             vocoded_audio = self.load_audio(vf)
             vocoded_audios.append(np.expand_dims(vocoded_audio, axis=1))
-            # Augmented vocoded samples as negative data
-            for augment in self.augmentation_methods:
-                augmented_vocoded_audio = globals()[augment](vocoded_audio, self.args, self.sample_rate, audio_path = vf)
-                augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
+            # Augmented vocoded samples as negative data with first augmentation method
+            augmented_vocoded_audio = globals()[self.augmentation_methods[0]](vocoded_audio, self.args, self.sample_rate, audio_path = vf)
+            augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
         
         # Augmented real samples as positive data
         augmented_audios = []
@@ -137,7 +138,7 @@ class Dataset_for(Dataset):
         # return will be anchor ID, batch data and label
         batch_data = Tensor(batch_data)
         # label is 1 for anchor and positive, 0 for vocoded
-        label = [1] * (len(augmented_audios) +len(additional_audios) + 1) + [0] * len(self.vocoders*(1+len(self.augmentation_methods)))
+        label = [1] * (len(augmented_audios) +len(additional_audios) + 1) + [0] * len(self.vocoders*2)
         # print("label", label)
         return self.list_IDs[idx], batch_data, Tensor(label)
 
