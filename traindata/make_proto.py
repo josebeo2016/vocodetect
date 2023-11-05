@@ -343,7 +343,29 @@ def supcon_cnsl_sep30():
             f.write(file+'\n')
             
     
+
+def supcon_cnsl_oct24():
+    rate = 0.5
+    scp_dir = '/dataa/phucdt/vocodetect/traindata/supcon_cnsl_oct24/scp/'
+    bonafide_dir = '/dataa/phucdt/vocodetect/traindata/supcon_cnsl_oct24/bonafide/'
+    # Bonafide and vocoded from the supcon_cnsl_sep30
+    # this code is use to split bonafide to train and dev
     
+    # list bonafide files in '/dataa/phucdt/vocodetect/traindata/supcon_cnsl_oct24/bonafide'
+    bonafide_files = glob.glob('/dataa/phucdt/vocodetect/traindata/supcon_cnsl_oct24/bonafide/*.wav')
+    # shuffle
+    random.shuffle(bonafide_files)
+    # split train and dev
+    bonafide_train = bonafide_files[:int(len(bonafide_files)*rate)]
+    bonafide_dev = bonafide_files[int(len(bonafide_files)*rate):]
+    
+    # write lst file
+    with open(os.path.join(scp_dir, 'train_bonafide.lst'), 'w') as f:
+        for file in bonafide_train:
+            f.write(file.replace(bonafide_dir,"")+'\n')
+    with open(os.path.join(scp_dir, 'dev_bonafide.lst'), 'w') as f:
+        for file in bonafide_dev:
+            f.write(file.replace(bonafide_dir,"")+'\n')
     
 
 if __name__ == "__main__":
@@ -355,4 +377,5 @@ if __name__ == "__main__":
     # in_the_wild()
     # wavefake()
     # asvspoof_2021_df()
-    supcon_cnsl_sep30()
+    # supcon_cnsl_sep30()
+    supcon_cnsl_oct24()
