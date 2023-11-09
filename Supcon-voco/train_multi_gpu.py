@@ -7,6 +7,7 @@ from torch import nn
 from torch import Tensor
 from torch.utils.data import DataLoader
 import yaml
+from tqdm import tqdm
 
 from model.wav2vec2_resnet import Model as wav2vec2_resnet
 from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
@@ -119,7 +120,7 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     key_list = []
     score_list = []
     
-    for batch_x, utt_id in data_loader:
+    for batch_x, utt_id in tqdm(data_loader):
         fname_list = []
         score_list = []  
         pred_list = []
