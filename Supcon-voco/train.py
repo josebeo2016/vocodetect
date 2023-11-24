@@ -16,6 +16,8 @@ from model.wav2vec2_linear import Model as wav2vec2_linear
 from model.wav2vec2_linear_phucdt import Model as wav2vec2_linear_phucdt  
 from model.wav2vec2_linear_nll import Model as wav2vec2_linear_nll
 from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
+from model.wav2vec2_conformer_nll import Model as wav2vec2_conformer_nll
+
 import importlib
 import time
 from tensorboardX import SummaryWriter
@@ -77,8 +79,8 @@ def evaluate_accuracy(dev_loader, model, device):
     return val_loss, val_accuracy, val_loss_detail
 
 
-def produce_evaluation_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False)
+def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0
     model.eval()
@@ -111,8 +113,8 @@ def produce_evaluation_file(dataset, model, device, save_path):
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-def produce_prediction_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
+def produce_prediction_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0
     model.eval()
@@ -303,9 +305,9 @@ if __name__ == '__main__':
         print('no. of eval trials',len(file_eval))
         eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'))
         if (args.predict):
-            produce_prediction_file(eval_set, model, device, args.eval_output)
+            produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         else:
-            produce_evaluation_file(eval_set, model, device, args.eval_output)
+            produce_evaluation_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         sys.exit(0)
    
      

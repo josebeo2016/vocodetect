@@ -142,8 +142,8 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-def produce_prediction_file(dataset, model, device, save_path):
-    data_loader = DataLoader(dataset, batch_size=10, shuffle=False, drop_last=False)
+def produce_prediction_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
     num_correct = 0.0
     num_total = 0.0
     model.eval()
@@ -308,7 +308,7 @@ if __name__ == '__main__':
         print('no. of eval trials',len(file_eval))
         eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'))
         if (args.predict):
-            produce_prediction_file(eval_set, model, device, args.eval_output)
+            produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         else:
             produce_evaluation_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         sys.exit(0)
