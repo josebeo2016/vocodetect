@@ -11,86 +11,37 @@ import os
 from model.loss_metrics import supcon_loss
 from .xlsr import SSLModel
 
+from .conformer import ConformerBlock
+from torch.nn.modules.transformer import _get_clones
+
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
 
-class DropoutForMC(nn.Module):
-    """Dropout layer for Bayesian model
-    THe difference is that we do dropout even in eval stage
-    """
-    def __init__(self, p, dropout_flag=True):
-        super(DropoutForMC, self).__init__()
-        self.p = p
-        self.flag = dropout_flag
-        return
-        
-    def forward(self, x):
-        return torch.nn.functional.dropout(x, self.p, training=self.flag)
+############################
+## Conformer model
+############################
+class MyConformer(nn.Module):
+  def __init__(self, emb_size=128, heads=4, ffmult=4, exp_fac=2, kernel_size=16, n_encoders=1):
+    super(MyConformer, self).__init__()
+    self.dim_head=int(emb_size/heads)
+    self.dim=emb_size
+    self.heads=heads
+    self.kernel_size=kernel_size
+    self.n_encoders=n_encoders
+    self.encoder_blocks=_get_clones( ConformerBlock( dim = emb_size, dim_head=self.dim_head, heads= heads, 
+    ff_mult = ffmult, conv_expansion_factor = exp_fac, conv_kernel_size = kernel_size),
+    n_encoders)
+    self.class_token = nn.Parameter(torch.rand(1, emb_size))
+    self.fc5 = nn.Linear(emb_size, 2)
 
-class BackEnd(nn.Module):
-    """Back End Wrapper
-    """
-    def __init__(self, input_dim, out_dim, num_classes, 
-                 dropout_rate, dropout_flag=True):
-        super(BackEnd, self).__init__()
+  def forward(self, x): # x shape [bs, tiempo, frecuencia]
+    x = torch.stack([torch.vstack((self.class_token, x[i])) for i in range(len(x))])#[bs,1+tiempo,emb_size]
+    for layer in self.encoder_blocks:
+            x = layer(x) #[bs,1+tiempo,emb_size]
+    embedding=x[:,0,:] #[bs, emb_size]
+    out=self.fc5(embedding) #[bs,2]
+    return out, embedding
 
-        # input feature dimension
-        self.in_dim = input_dim
-        # output embedding dimension
-        self.out_dim = out_dim
-        # number of output classes
-        self.num_class = num_classes
-        
-        # dropout rate
-        self.m_mcdp_rate = dropout_rate
-        self.m_mcdp_flag = dropout_flag
-        
-        # a simple full-connected network for frame-level feature processing
-        self.m_frame_level = nn.Sequential(
-            nn.Linear(self.in_dim, self.in_dim),
-            nn.LeakyReLU(),
-            torch.nn.Dropout(self.m_mcdp_rate),
-            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
-            
-            nn.Linear(self.in_dim, self.in_dim),
-            nn.LeakyReLU(),
-            torch.nn.Dropout(self.m_mcdp_rate),
-            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
-            
-            nn.Linear(self.in_dim, self.out_dim),
-            nn.LeakyReLU(),
-            torch.nn.Dropout(self.m_mcdp_rate)
-        )
-            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
-
-        # linear layer to produce output logits 
-        self.m_utt_level = nn.Linear(self.out_dim, self.num_class)
-        
-        return
-
-    def forward(self, feat):
-        """ logits, emb_vec = back_end_emb(feat)
-
-        input:
-        ------
-          feat: tensor, (batch, frame_num, feat_feat_dim)
-
-        output:
-        -------
-          logits: tensor, (batch, num_output_class)
-          emb_vec: tensor, (batch, emb_dim)
-        
-        """
-        # through the frame-level network
-        # (batch, frame_num, self.out_dim)
-        feat_ = self.m_frame_level(feat)
-        
-        # average pooling -> (batch, self.out_dim)
-        feat_utt = feat_.mean(1)
-        
-        # output linear 
-        logits = self.m_utt_level(feat_utt)
-        return logits, feat_utt
 
 class Model(nn.Module):
     def __init__(self, args, device, is_train = True):
@@ -104,14 +55,13 @@ class Model(nn.Module):
         # create network wav2vec 2.0
         ####
         self.ssl_model = SSLModel(self.device)
-        self.LL = nn.Linear(self.ssl_model.out_dim, 128)
+        self.LL = nn.Linear(self.ssl_model.out_dim, args['conformer']['emb_size'])
         self.first_bn = nn.BatchNorm2d(num_features=1)
-        self.first_bn1 = nn.BatchNorm2d(num_features=64)
         self.drop = nn.Dropout(0.5, inplace=True)
         self.selu = nn.SELU(inplace=True)
         
+        self.backend=MyConformer(**args['conformer'])
         self.loss_CE = nn.CrossEntropyLoss()
-        self.backend = BackEnd(128, 128, 2, 0.5, False)
         
         self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
             mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
@@ -123,10 +73,13 @@ class Model(nn.Module):
         x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
-        x = nn.ReLU()(x)
-        
+        x = x.unsqueeze(dim=1) # add channel #(bs, 1, frame_number, 256)
+        x = self.first_bn(x)
+        x = self.selu(x)
+        x = x.squeeze(dim=1)
+
         # output [batch, 2]
-        # emb [batch, 128]
+        # emb [batch, emb_size]
         output, emb = self.backend(x)
         output = F.log_softmax(output, dim=1)
         if (self.is_train):
