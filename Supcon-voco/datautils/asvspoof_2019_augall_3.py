@@ -79,6 +79,7 @@ class Dataset_for(Dataset):
         
         self.trim_length = trim_length
         self.sample_rate = wav_samp_rate
+        self.repeat_pad = True
 
         self.vocoders = vocoders
         print("vocoders:", vocoders)
@@ -129,7 +130,9 @@ class Dataset_for(Dataset):
         # merge all the data
         batch_data = [np.expand_dims(real_audio, axis=1)] + augmented_audios + additional_audios + vocoded_audios + augmented_vocoded_audios
         batch_data = nii_wav_aug.batch_pad_for_multiview(
-                batch_data, self.sample_rate, self.trim_length, random_trim_nosil=True)
+            # batch_data, self.sample_rate, self.trim_length, random_trim_nosil=True)
+                batch_data, self.sample_rate, self.trim_length, random_trim_nosil=True, repeat_pad=self.repeat_pad)
+                
         batch_data = np.concatenate(batch_data, axis=1)
         # print("batch_data.shape", batch_data.shape)
         
