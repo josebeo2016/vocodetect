@@ -78,6 +78,46 @@ def evaluate_accuracy(dev_loader, model, device):
    
     return val_loss, val_accuracy, val_loss_detail
 
+def produce_emb_file(dataset, model, device, save_path, batch_size=10):
+    data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
+    num_correct = 0.0
+    num_total = 0.0
+    model.eval()
+    model.is_train = True
+
+    fname_list = []
+    key_list = []
+    score_list = []
+    
+    for batch_x, utt_id in tqdm(data_loader):
+        fname_list = []
+        score_list = []  
+        pred_list = []
+        batch_size = batch_x.size(0)
+        batch_x = batch_x.to(device)
+        
+        batch_out, _, batch_emb = model(batch_x)
+        score_list.extend(batch_out.data.cpu().numpy().tolist())
+        # add outputs
+        fname_list.extend(utt_id)
+
+        # save_path now must be a directory
+        # make dir if not exist
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        # Then each emb should be save in a file with name is utt_id
+        for f, emb in zip(fname_list,batch_emb):
+            # normalize filename
+            f = f.split('/')[-1].split('.')[0] # utt id only
+            save_path_utt = os.path.join(save_path, f)
+            np.save(save_path_utt, emb.data.cpu().numpy())
+        
+        # score file save into a single file
+        with open(os.path.join(save_path, "scores.txt"), 'a+') as fh:
+            for f, cm in zip(fname_list,score_list):
+                fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
+        fh.close()   
+    print('Scores saved to {}'.format(save_path))
 
 def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -306,6 +346,8 @@ if __name__ == '__main__':
         eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'))
         if (args.predict):
             produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
+        elif (args.emb):
+            produce_emb_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         else:
             produce_evaluation_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         sys.exit(0)
