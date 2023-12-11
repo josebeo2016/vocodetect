@@ -146,3 +146,5 @@ Vocoders/checkpoints/
 Vocoders/log/
 traindata/jul6/in_the_wild_bona
 traindata/toy_example_vocoded
+
+.vscode/

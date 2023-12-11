@@ -336,9 +336,6 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
     
-    # set device for multi-gpu model
-    if torch.cuda.device_count() >= 1:
-        model = nn.DataParallel(model)
         
     # load state dict
     if args.model_path:
