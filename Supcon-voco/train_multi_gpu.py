@@ -15,6 +15,7 @@ from model.wav2vec2_aasist import Model as wav2vec2_aasist
 from model.wav2vec2_linear import Model as wav2vec2_linear 
 from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
 from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
+from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
 import importlib
 import time
 
@@ -333,32 +334,23 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*10000,weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*10000, cycle_momentum=False)
     
-        
     # load state dict
     if args.model_path:
-        try:
-            # set device for multi-gpu model
-            if torch.cuda.device_count() >= 1:
-                model = nn.DataParallel(model)
-            model.load_state_dict(torch.load(args.model_path))
-        except:
-            # re initialize model
-            # when model is saved without DataParallel
-            
-            model = globals()[config['model']['name']](config['model'], device)
-            nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
-            model = model.to(device)
-            model.load_state_dict(torch.load(args.model_path))
-            # set device for multi-gpu model
-            if torch.cuda.device_count() >= 1:
-                model = nn.DataParallel(model)
-
-            
-        print('Model loaded : {}'.format(args.model_path))
-        
+        # fix state dict missing and unexpected keys
+        pretrained_dict = torch.load(args.model_path)
+        pretrained_dict = {key.replace("module.", ""): value for key, value in pretrained_dict.items()}
+        pretrained_dict = {key.replace("_orig_mod.", ""): value for key, value in pretrained_dict.items()}
+        model.load_state_dict(pretrained_dict)
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        print('Model loaded')
+    else:
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        print('Model initialized')
     #evaluation 
     if args.eval:
         _,file_eval = genList(dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=True)
@@ -397,6 +389,17 @@ if __name__ == '__main__':
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
+    # Compile the model and time how long it takes
+    compile_start_time = time.time()
+
+    ### New in PyTorch 2.x ###
+    compiled_model = torch.compile(model)
+    ##########################
+
+    compile_end_time = time.time()
+    compile_time = compile_end_time - compile_start_time
+    print(f"Time to compile: {compile_time} | Note: The first time you compile your model, the first few epochs will be slower than subsequent runs.")
+
     
     # Training and validation 
     num_epochs = args.num_epochs
@@ -406,8 +409,8 @@ if __name__ == '__main__':
     for epoch in range(num_epochs):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
-        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.lr, optimizer, device, config)
-        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, model, device)
+        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, compiled_model, args.lr, optimizer, device, config)
+        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, compiled_model, device)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
         writer.add_scalar('val_loss', val_loss, epoch)
@@ -419,7 +422,7 @@ if __name__ == '__main__':
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
         scheduler.step()
         # check early stopping
-        early_stopping(val_loss, model, epoch)
+        early_stopping(val_loss, compiled_model, epoch)
         if early_stopping.early_stop:
             print("Early stopping activated.")
             
