@@ -389,17 +389,22 @@ if __name__ == '__main__':
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
+    # check torch version > 2.x
+    if torch.__version__ >= '2.0.0':
     # Compile the model and time how long it takes
-    compile_start_time = time.time()
+        compile_start_time = time.time()
 
-    ### New in PyTorch 2.x ###
-    compiled_model = torch.compile(model)
-    ##########################
+        ### New in PyTorch 2.x ###
+        compiled_model = torch.compile(model)
+        ##########################
 
-    compile_end_time = time.time()
-    compile_time = compile_end_time - compile_start_time
-    print(f"Time to compile: {compile_time} | Note: The first time you compile your model, the first few epochs will be slower than subsequent runs.")
+        compile_end_time = time.time()
+        compile_time = compile_end_time - compile_start_time
+        print(f"Time to compile: {compile_time} | Note: The first time you compile your model, the first few epochs will be slower than subsequent runs.")
 
+    else:
+        compiled_model = model
+        print("Your PyTorch version is outdated. Please update to version 2.x or greater.")
     
     # Training and validation 
     num_epochs = args.num_epochs
