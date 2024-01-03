@@ -55,7 +55,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
     num_correct = 0.0
     num_total = 0.0
     train_loss_detail = {}
-    for info, batch_x, batch_y in train_loader:
+    for info, batch_x, batch_y in tqdm(train_loader):
         train_loss = 0.0
         # print("training on anchor: ", info)
         num_total +=batch_x.shape[2]
@@ -152,36 +152,59 @@ def produce_emb_file(dataset, model, device, save_path, batch_size=10):
         fh.close()   
     print('Scores saved to {}'.format(save_path))
 
+# def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
+#     data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
+#     num_correct = 0.0
+#     num_total = 0.0
+#     model.eval()
+#     # set to inference mode with no grad
+#     model.is_train = False
+    
+
+#     fname_list = []
+#     key_list = []
+#     score_list = []
+    
+#     for batch_x, utt_id in tqdm(data_loader):
+#         fname_list = []
+#         score_list = []  
+#         pred_list = []
+#         batch_size = batch_x.size(0)
+#         batch_x = batch_x.to(device)
+        
+#         batch_out, _, _ = model(batch_x)
+#         batch_score = (batch_out[:, 1]  
+#                        ).data.cpu().numpy().ravel() 
+#         # _,batch_pred = batch_out.max(dim=1)
+        
+#         # add outputs
+#         fname_list.extend(utt_id)
+#         score_list.extend(batch_out.data.cpu().numpy().tolist())
+        
+#         with open(save_path, 'a+') as fh:
+#             for f, cm in zip(fname_list,score_list):
+#                 fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
+#         fh.close()   
+#     print('Scores saved to {}'.format(save_path))
 def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
-    data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
-    num_correct = 0.0
-    num_total = 0.0
+    data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False) 
     model.eval()
 
-    fname_list = []
-    key_list = []
-    score_list = []
-    
-    for batch_x, utt_id in tqdm(data_loader):
-        fname_list = []
-        score_list = []  
-        pred_list = []
-        batch_size = batch_x.size(0)
-        batch_x = batch_x.to(device)
-        
-        batch_out, _, _ = model(batch_x)
-        batch_score = (batch_out[:, 1]  
-                       ).data.cpu().numpy().ravel() 
-        _,batch_pred = batch_out.max(dim=1)
-        
-        # add outputs
-        fname_list.extend(utt_id)
-        score_list.extend(batch_out.data.cpu().numpy().tolist())
-        
-        with open(save_path, 'a+') as fh:
-            for f, cm in zip(fname_list,score_list):
-                fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
-        fh.close()   
+    with torch.no_grad():
+        for batch_x, utt_id in tqdm(data_loader):
+            batch_x = batch_x.to(device)
+
+            batch_out, _, _ = model(batch_x)
+            batch_score = batch_out[:, 1].cpu().numpy().ravel()
+
+            # add outputs
+            fname_list = list(utt_id)
+            score_list = batch_score.tolist()
+
+            with open(save_path, 'a+') as fh:
+                for f, cm in zip(fname_list, score_list):
+                    fh.write('{} {}\n'.format(f, cm))
+
     print('Scores saved to {}'.format(save_path))
 
 def produce_prediction_file(dataset, model, device, save_path, batch_size=10):
@@ -230,10 +253,13 @@ if __name__ == '__main__':
     # Hyperparameters
     parser.add_argument('--batch_size', type=int, default=14)
     parser.add_argument('--num_epochs', type=int, default=100)
+    parser.add_argument('--start_epoch', type=int, default=0)
     parser.add_argument('--lr', type=float, default=0.000001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--loss', type=str, default='weighted_CCE')
     parser.add_argument('--config', type=str, default='configs/config.yaml')
+    parser.add_argument('--padding_type', type=str, default='zero', 
+                        help='zero or repeat')
     # model
     parser.add_argument('--seed', type=int, default=1234, 
                         help='random seed (default: 1234)')
@@ -334,8 +360,8 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*10000,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*10000, cycle_momentum=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
     
     # load state dict
     if args.model_path:
@@ -355,7 +381,7 @@ if __name__ == '__main__':
     if args.eval:
         _,file_eval = genList(dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=True)
         print('no. of eval trials',len(file_eval))
-        eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'))
+        eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'), padding_type=args.padding_type)
         if (args.predict):
             produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         elif (args.emb):
@@ -369,9 +395,9 @@ if __name__ == '__main__':
     d_label_trn,file_train = genList( dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=True,is_eval=False,is_dev=False)
     
     print('no. of training trials',len(file_train))
-    
+    is_repeat_pad = True if args.padding_type=='repeat' else False
     train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, 
-        base_dir = args.database_path+'/',algo=args.algo, **config['data']['kwargs'])
+        base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
     
     train_loader = DataLoader(train_set, batch_size=args.batch_size,num_workers=8, shuffle=True,drop_last = True)
     
@@ -385,7 +411,7 @@ if __name__ == '__main__':
     print('no. of validation trials',len(file_dev))
     
     dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
-		base_dir = args.database_path+'/',algo=args.algo, **config['data']['kwargs'])
+		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
@@ -411,7 +437,7 @@ if __name__ == '__main__':
     writer = SummaryWriter('logs/{}'.format(model_tag))
     early_stopping = EarlyStop(patience=10, delta=0, init_best=0.2, save_dir=model_save_path)
     start_train_time = time.time()
-    for epoch in range(num_epochs):
+    for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
         running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, compiled_model, args.lr, optimizer, device, config)

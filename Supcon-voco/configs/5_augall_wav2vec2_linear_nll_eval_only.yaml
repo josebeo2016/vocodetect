@@ -21,3 +21,4 @@ data:
     aug_dir: '/datab/phucdt/Asvspoof_aug/asvspoof2019'
     noise_path: '/dataa/phucdt/vocodetect/Supcon-voco/datautils/audio_augmentor/musan'
     rir_path: '/dataa/phucdt/vocodetect/Supcon-voco/datautils/audio_augmentor/RIRS_NOISES'
+    repeat_pad: false
