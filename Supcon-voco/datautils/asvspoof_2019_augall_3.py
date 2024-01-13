@@ -61,7 +61,9 @@ def pad(x, padding_type, max_len=64600):
 
 class Dataset_for(Dataset):
     def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
-                 augmentation_methods=[], num_additional_real=2, trim_length=64000, wav_samp_rate=16000, noise_path=None, rir_path=None, aug_dir=None, online_aug=False):
+                 augmentation_methods=[], num_additional_real=2, trim_length=64000, 
+                 wav_samp_rate=16000, noise_path=None, rir_path=None, aug_dir=None, 
+                 online_aug=False, repeat_pad=True):
         """
         Args:
             list_IDs (string): Path to the .lst file with real audio filenames.
@@ -79,7 +81,7 @@ class Dataset_for(Dataset):
         
         self.trim_length = trim_length
         self.sample_rate = wav_samp_rate
-        self.repeat_pad = True
+        self.repeat_pad = repeat_pad
 
         self.vocoders = vocoders
         print("vocoders:", vocoders)

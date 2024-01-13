@@ -2,7 +2,7 @@ model:
   name: wav2vec2_resnet_nll
   flag_fix_ssl: false
   contra_mode: 'all' # 'one' or 'all'
-  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
+  loss_type: 4 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 4: LCE loss only
   resnet:
     num_nodes: 3
     enc_dim: 256

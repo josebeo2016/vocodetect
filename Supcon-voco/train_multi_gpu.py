@@ -37,7 +37,7 @@ class EarlyStop:
     def __call__(self, score, model, epoch):
         if self.best_score is None:
             self.best_score = score
-        elif score > self.best_score + self.delta:
+        elif score < self.best_score + self.delta:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
@@ -58,9 +58,14 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
     for info, batch_x, batch_y in tqdm(train_loader):
         train_loss = 0.0
         # print("training on anchor: ", info)
-        num_total +=batch_x.shape[2]
+        # check number of dimension of batch_x
         batch_x = batch_x.to(device)
-        batch_x = batch_x.squeeze(0).transpose(0,1)
+        if len(batch_x.shape) == 3:
+            num_total +=batch_x.shape[2]
+            batch_x = batch_x.squeeze(0).transpose(0,1)
+        else:
+            num_total +=batch_x.shape[0]
+        
         # print("batch_y.shape", batch_y.shape)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
         batch_out, batch_feat, batch_emb = model(batch_x)
@@ -78,35 +83,39 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         train_loss.backward()
         optimizer.step()
 
-    running_loss /= num_total
+    # running_loss /= num_total
     train_accuracy = (num_correct/num_total)*100
     return running_loss, train_accuracy, train_loss_detail
 
-def evaluate_accuracy(dev_loader, model, device):
+def evaluate_accuracy(dev_loader, model, device, config):
     val_loss = 0.0
     val_loss_detail = {}
     num_total = 0.0
     num_correct = 0.0
     model.eval()
-    for info, batch_x, batch_y in dev_loader:
-        loss_value = 0.0
-        # print("Validating on anchor: ", info)
-        # print("batch_x.shape", batch_x.shape)
-        num_total +=batch_x.shape[2]
-        batch_x = batch_x.to(device)
-        batch_x = batch_x.squeeze(0).transpose(0,1)
-        batch_y = batch_y.view(-1).type(torch.int64).to(device)
+    with torch.no_grad():
+        for info, batch_x, batch_y in tqdm(dev_loader):
+            loss_value = 0.0
+            # print("Validating on anchor: ", info)
+            # print("batch_x.shape", batch_x.shape)
+            batch_x = batch_x.to(device)
+            if len(batch_x.shape) == 3:
+                num_total +=batch_x.shape[2]
+                batch_x = batch_x.squeeze(0).transpose(0,1)
+            else:
+                num_total +=batch_x.shape[0]
+            batch_y = batch_y.view(-1).type(torch.int64).to(device)
+            
+            batch_out, batch_feat, batch_emb = model(batch_x)
+            losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+            for key, value in losses.items():
+                loss_value += value
+                val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()
+            val_loss+=loss_value.item()
+            _, batch_pred = batch_out.max(dim=1)
+            num_correct += (batch_pred == batch_y).sum(dim=0).item()
         
-        batch_out, batch_feat, batch_emb = model(batch_x)
-        losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
-        for key, value in losses.items():
-            loss_value += value
-            val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()
-        val_loss+=loss_value.item()
-        _, batch_pred = batch_out.max(dim=1)
-        num_correct += (batch_pred == batch_y).sum(dim=0).item()
-        
-    val_loss /= num_total
+    # val_loss /= num_total
     val_accuracy = (num_correct/num_total)*100
    
     return val_loss, val_accuracy, val_loss_detail
@@ -121,71 +130,37 @@ def produce_emb_file(dataset, model, device, save_path, batch_size=10):
     fname_list = []
     key_list = []
     score_list = []
-    
-    for batch_x, utt_id in tqdm(data_loader):
-        fname_list = []
-        score_list = []  
-        pred_list = []
-        batch_size = batch_x.size(0)
-        batch_x = batch_x.to(device)
-        
-        batch_out, _, batch_emb = model(batch_x)
-        score_list.extend(batch_out.data.cpu().numpy().tolist())
-        # add outputs
-        fname_list.extend(utt_id)
+    with torch.no_grad():
+        for batch_x, utt_id in tqdm(data_loader):
+            fname_list = []
+            score_list = []  
+            pred_list = []
+            batch_size = batch_x.size(0)
+            batch_x = batch_x.to(device)
+            
+            batch_out, _, batch_emb = model(batch_x)
+            score_list.extend(batch_out.data.cpu().numpy().tolist())
+            # add outputs
+            fname_list.extend(utt_id)
 
-        # save_path now must be a directory
-        # make dir if not exist
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        # Then each emb should be save in a file with name is utt_id
-        for f, emb in zip(fname_list,batch_emb):
-            # normalize filename
-            f = f.split('/')[-1].split('.')[0] # utt id only
-            save_path_utt = os.path.join(save_path, f)
-            np.save(save_path_utt, emb.data.cpu().numpy())
-        
-        # score file save into a single file
-        with open(os.path.join(save_path, "scores.txt"), 'a+') as fh:
-            for f, cm in zip(fname_list,score_list):
-                fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
-        fh.close()   
+            # save_path now must be a directory
+            # make dir if not exist
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            # Then each emb should be save in a file with name is utt_id
+            for f, emb in zip(fname_list,batch_emb):
+                # normalize filename
+                f = f.split('/')[-1].split('.')[0] # utt id only
+                save_path_utt = os.path.join(save_path, f)
+                np.save(save_path_utt, emb.data.cpu().numpy())
+            
+            # score file save into a single file
+            with open(os.path.join(save_path, "scores.txt"), 'a+') as fh:
+                for f, cm in zip(fname_list,score_list):
+                    fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
+            fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-# def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
-#     data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False)
-#     num_correct = 0.0
-#     num_total = 0.0
-#     model.eval()
-#     # set to inference mode with no grad
-#     model.is_train = False
-    
-
-#     fname_list = []
-#     key_list = []
-#     score_list = []
-    
-#     for batch_x, utt_id in tqdm(data_loader):
-#         fname_list = []
-#         score_list = []  
-#         pred_list = []
-#         batch_size = batch_x.size(0)
-#         batch_x = batch_x.to(device)
-        
-#         batch_out, _, _ = model(batch_x)
-#         batch_score = (batch_out[:, 1]  
-#                        ).data.cpu().numpy().ravel() 
-#         # _,batch_pred = batch_out.max(dim=1)
-        
-#         # add outputs
-#         fname_list.extend(utt_id)
-#         score_list.extend(batch_out.data.cpu().numpy().tolist())
-        
-#         with open(save_path, 'a+') as fh:
-#             for f, cm in zip(fname_list,score_list):
-#                 fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
-#         fh.close()   
-#     print('Scores saved to {}'.format(save_path))
 def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     data_loader = DataLoader(dataset, batch_size, shuffle=False, drop_last=False) 
     model.eval()
@@ -218,27 +193,27 @@ def produce_prediction_file(dataset, model, device, save_path, batch_size=10):
     fname_list = []
     key_list = []
     score_list = []
-    
-    for batch_x, utt_id in data_loader:
-        fname_list = []
-        score_list = []  
-        pred_list = []
-        batch_size = batch_x.size(0)
-        batch_x = batch_x.to(device)
-        
-        batch_out = model(batch_x)
-        batch_score = (batch_out[:, 1]  
-                       ).data.cpu().numpy().ravel() 
-        _,batch_pred = batch_out.max(dim=1)
-        # add outputs
-        fname_list.extend(utt_id)
-        score_list.extend(batch_score.tolist())
-        pred_list.extend(batch_pred.tolist())
-        
-        with open(save_path, 'a+') as fh:
-            for f, cm, pred in zip(fname_list,score_list, pred_list):
-                fh.write('{} {} {}\n'.format(f, cm, pred))
-        fh.close()   
+    with torch.no_grad():
+        for batch_x, utt_id in data_loader:
+            fname_list = []
+            score_list = []  
+            pred_list = []
+            batch_size = batch_x.size(0)
+            batch_x = batch_x.to(device)
+            
+            batch_out = model(batch_x)
+            batch_score = (batch_out[:, 1]  
+                        ).data.cpu().numpy().ravel() 
+            _,batch_pred = batch_out.max(dim=1)
+            # add outputs
+            fname_list.extend(utt_id)
+            score_list.extend(batch_score.tolist())
+            pred_list.extend(batch_pred.tolist())
+            
+            with open(save_path, 'a+') as fh:
+                for f, cm, pred in zip(fname_list,score_list, pred_list):
+                    fh.write('{} {} {}\n'.format(f, cm, pred))
+            fh.close()   
     print('Scores saved to {}'.format(save_path))
 
 if __name__ == '__main__':
@@ -435,13 +410,13 @@ if __name__ == '__main__':
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    early_stopping = EarlyStop(patience=10, delta=0, init_best=0.2, save_dir=model_save_path)
+    early_stopping = EarlyStop(patience=10, delta=0.01, init_best=90.0, save_dir=model_save_path)
     start_train_time = time.time()
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
         running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, compiled_model, args.lr, optimizer, device, config)
-        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, compiled_model, device)
+        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, compiled_model, device, config)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
         writer.add_scalar('val_loss', val_loss, epoch)
@@ -453,10 +428,9 @@ if __name__ == '__main__':
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
         scheduler.step()
         # check early stopping
-        early_stopping(val_loss, compiled_model, epoch)
+        early_stopping(val_accuracy, compiled_model, epoch)
         if early_stopping.early_stop:
             print("Early stopping activated.")
-            
             break
         
     print("Total training time: {}s".format(time.time() - start_train_time))
