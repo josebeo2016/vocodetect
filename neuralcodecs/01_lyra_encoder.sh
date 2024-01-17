@@ -23,8 +23,8 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
 
-filelist=$(ls $INPUT_DIR/*.wav)
-filecount=$(ls $INPUT_DIR/*.wav | wc -l)
+filelist=$(find $INPUT_DIR -maxdepth 1 -name "*.wav")
+filecount=$(find $INPUT_DIR -maxdepth 1 -name "*.wav" | wc -l)
 # encode the audio files
 cd lyra/
 counter=0

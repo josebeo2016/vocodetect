@@ -146,10 +146,11 @@ class Dataset_for(Dataset):
         return self.list_IDs[idx], batch_data, Tensor(label)
 
 class Dataset_for_eval(Dataset):
-    def __init__(self, list_IDs, base_dir):
+    def __init__(self, list_IDs, base_dir, padding_type="zero"):
         self.list_IDs = list_IDs
         self.base_dir = os.path.join(base_dir, 'eval')
         self.cut=64600 # take ~4 sec audio (64600 samples)
+        self.padding_type = padding_type
     def __len__(self):
         return len(self.list_IDs)
     
@@ -157,7 +158,7 @@ class Dataset_for_eval(Dataset):
             
         utt_id = self.list_IDs[index]
         X, fs = librosa.load(self.base_dir + "/" + utt_id, sr=16000)
-        X_pad = pad(X,"zero",self.cut)
+        X_pad = pad(X,self.padding_type,self.cut)
         x_inp = Tensor(X_pad)
         return x_inp, utt_id
 
