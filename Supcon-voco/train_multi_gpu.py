@@ -16,6 +16,10 @@ from model.wav2vec2_linear import Model as wav2vec2_linear
 from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
 from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
 from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
+try:
+    from model.wav2vec2_btse import wav2vec2_btse
+except:
+    print("No dependency for wav2vec2_btse. Please switch to conda env bio")
 import importlib
 import time
 
@@ -170,15 +174,15 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
             batch_x = batch_x.to(device)
 
             batch_out, _, _ = model(batch_x)
-            batch_score = batch_out[:, 1].cpu().numpy().ravel()
+            # batch_score = batch_out[:, 1].cpu().numpy().ravel()
 
             # add outputs
             fname_list = list(utt_id)
-            score_list = batch_score.tolist()
+            score_list = batch_out.data.cpu().numpy().tolist()
 
             with open(save_path, 'a+') as fh:
                 for f, cm in zip(fname_list, score_list):
-                    fh.write('{} {}\n'.format(f, cm))
+                    fh.write('{} {} {}\n'.format(f, cm[0], cm[1]))
 
     print('Scores saved to {}'.format(save_path))
 
@@ -390,22 +394,7 @@ if __name__ == '__main__':
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
-    # check torch version > 2.x
-    if torch.__version__ >= '2.0.0':
-    # Compile the model and time how long it takes
-        compile_start_time = time.time()
 
-        ### New in PyTorch 2.x ###
-        compiled_model = torch.compile(model)
-        ##########################
-
-        compile_end_time = time.time()
-        compile_time = compile_end_time - compile_start_time
-        print(f"Time to compile: {compile_time} | Note: The first time you compile your model, the first few epochs will be slower than subsequent runs.")
-
-    else:
-        compiled_model = model
-        print("Your PyTorch version is outdated. Please update to version 2.x or greater.")
     
     # Training and validation 
     num_epochs = args.num_epochs
@@ -415,8 +404,8 @@ if __name__ == '__main__':
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
-        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, compiled_model, args.lr, optimizer, device, config)
-        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, compiled_model, device, config)
+        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.lr, optimizer, device, config)
+        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, model, device, config)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
         writer.add_scalar('val_loss', val_loss, epoch)
@@ -428,7 +417,7 @@ if __name__ == '__main__':
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
         scheduler.step()
         # check early stopping
-        early_stopping(val_accuracy, compiled_model, epoch)
+        early_stopping(val_accuracy, model, epoch)
         if early_stopping.early_stop:
             print("Early stopping activated.")
             break
