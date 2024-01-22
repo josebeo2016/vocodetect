@@ -146,5 +146,6 @@ Vocoders/checkpoints/
 Vocoders/log/
 traindata/jul6/in_the_wild_bona
 traindata/toy_example_vocoded
+neuralcodecs/la2019_bona
 
 .vscode/

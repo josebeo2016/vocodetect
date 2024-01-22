@@ -24,8 +24,8 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p "$OUTPUT_DIR"
 fi
 
-filelist=$(find $INPUT_DIR -maxdepth 1 -name "*.lyra" |grep "LA_E")
-filecount=$(find $INPUT_DIR -maxdepth 1 -name "*.lyra" |grep "LA_E" | wc -l)
+filelist=$(find $INPUT_DIR -maxdepth 1 -name "*.lyra" |grep "LA_D")
+filecount=$(find $INPUT_DIR -maxdepth 1 -name "*.lyra" |grep "LA_D" | wc -l)
 # decode the audio files
 cd lyra/
 counter=0
