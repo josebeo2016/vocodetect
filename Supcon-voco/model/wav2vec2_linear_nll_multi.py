@@ -124,8 +124,11 @@ class Model(nn.Module):
         
     def _forward(self, x):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
-
-        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), self.is_train) #(bs,frame_number,feat_dim)
+        if self.flag_fix_ssl:
+            with torch.no_grad():
+                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+        else:
+            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
         x = nn.ReLU()(x)

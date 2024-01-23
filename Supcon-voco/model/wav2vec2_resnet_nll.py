@@ -10,6 +10,7 @@ import fairseq
 import os
 import model.resnet as resnet
 from model.loss_metrics import supcon_loss
+from .xlsr import SSLModel
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
@@ -19,39 +20,6 @@ __email__ = "tak@eurecom.fr"
 ############################
 
 BASE_DIR=os.path.dirname(os.path.abspath(__file__))
-
-class SSLModel(nn.Module):
-    def __init__(self,device):
-        super(SSLModel, self).__init__()
-        
-        cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')
-        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
-        self.model = model[0]
-        self.device=device
-
-        self.out_dim = 1024
-        return
-
-    def extract_feat(self, input_data):
-        
-        # put the model to GPU if it not there
-        if next(self.model.parameters()).device != input_data.device \
-           or next(self.model.parameters()).dtype != input_data.dtype:
-            self.model.to(input_data.device, dtype=input_data.dtype)
-            self.model.train()
-
-        
-        if True:
-            # input should be in shape (batch, length)
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-                
-            # [batch, length, dim]
-            emb = self.model(input_tmp, mask=False, features_only=True)['x']
-            # print(emb.shape)
-        return emb
 
 class Model(nn.Module):
     def __init__(self, args, device, is_train = True):
@@ -83,8 +51,11 @@ class Model(nn.Module):
     def _forward(self, x):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
 
-        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
-        # print("x_ssl_feat.shape", x_ssl_feat.shape)
+        if self.flag_fix_ssl:
+            with torch.no_grad():
+                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+        else:
+            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
         # print("x.shape", x.shape)
@@ -107,7 +78,7 @@ class Model(nn.Module):
         if (self.is_train):
             # x_big is a tensor of [1, length, bz]
             # convert to [bz, length]
-            x_big = x_big.squeeze(0).transpose(0,1)
+            # x_big = x_big.squeeze(0).transpose(0,1)
             output, feats, emb = self._forward(x_big)
             return output, feats, emb
         else:

@@ -339,8 +339,8 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*10000,weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*10000, cycle_momentum=False)
     
     # load state dict
     if args.model_path:
