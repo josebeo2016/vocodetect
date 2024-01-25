@@ -239,6 +239,8 @@ if __name__ == '__main__':
     parser.add_argument('--config', type=str, default='configs/config.yaml')
     parser.add_argument('--padding_type', type=str, default='zero', 
                         help='zero or repeat')
+    parser.add_argument('--is_train', type=bool, default=True,
+                        help='training dataloader or dev dataloader')
     # model
     parser.add_argument('--seed', type=int, default=1234, 
                         help='random seed (default: 1234)')
@@ -339,8 +341,8 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*10000,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*10000, cycle_momentum=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
     
     # load state dict
     if args.model_path:
@@ -388,7 +390,7 @@ if __name__ == '__main__':
     d_label_dev,file_dev = genList(dir_meta = os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=False, is_dev=True)
     
     print('no. of validation trials',len(file_dev))
-    
+    args.is_train = False
     dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
 		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)

@@ -148,4 +148,7 @@ traindata/jul6/in_the_wild_bona
 traindata/toy_example_vocoded
 neuralcodecs/la2019_bona
 
+traindata/asvspoof_2019_supcon/spoof_train/
+traindata/asvspoof_2019_supcon/spoof_dev/
+
 .vscode/
