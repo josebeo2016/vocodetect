@@ -1,3 +1,4 @@
+# 1 anchor, 3 aug anchor, 1 other real, 3 vocoded, 3 aug vocoded - randomly choose aug method each sample
 model:
   name: wav2vec2_linear_nll
   flag_fix_ssl: false

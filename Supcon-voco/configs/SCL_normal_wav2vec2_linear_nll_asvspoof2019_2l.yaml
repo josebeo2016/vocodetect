@@ -1,3 +1,4 @@
+# 1 anchor, 1 aug anchor, 2 other real, 2 aug real, 3 spoof, 3 aug spoof
 model:
   name: wav2vec2_linear_nll
   flag_fix_ssl: false
