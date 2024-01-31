@@ -274,7 +274,7 @@ class Model(nn.Module):
         self.backend = backend(args, self.device)
         self.is_train = True
         self.loss_type = args['loss_type']
-        self.Wav2bioCNN = Wav2bioCNN(device=device)
+        self.Wav2bioCNN = Wav2bioCNN(device=self.device)
         
         #PHUCDT
         # self.bioScoring = bioEncoderConv(args, self.device)
@@ -301,28 +301,24 @@ class Model(nn.Module):
         self.logsoftmax = nn.LogSoftmax(dim=1)
         
     def get_Bio(self, X_pad, fs):
-        
-        # loop in batch
-        device = X_pad.device
-        # print("device", device)
         X_pad = X_pad.cpu().numpy()
         bio = []
         bio_length = []
         for i in range(X_pad.shape[0]):
-            bio.append(self.Wav2bioCNN.wav2bio(X_pad[i], fs, device))
+            bio.append(self.Wav2bioCNN.wav2bio(X_pad[i], fs, self.device))
             bio_length.append(len(bio[-1]))
         
         # stack to tensor
         bio = torch.IntTensor(bio)
         bio_length = torch.IntTensor(bio_length)
-        bio = bio.to(device)
-        bio_length = bio_length.to(device)
+        bio = bio.to(self.device)
+        bio_length = bio_length.to(self.device)
         return bio, bio_length
     
     def forward(self, x, bio = None, bio_lengths = None, y = None):
         if (bio is None):
             bio, bio_lengths = self.get_Bio(x, 16000)
-        out ,x, ssl_feat = self.backend(x)
+        out , x, ssl_feat = self.backend(x)
         
         # #PHUCDT
         if (bio is not None):

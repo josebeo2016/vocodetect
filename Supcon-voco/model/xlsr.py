@@ -31,16 +31,13 @@ class SSLModel(nn.Module):
             self.model.train()
         else:
             self.model.eval()
+        # input should be in shape (batch, length)
+        if input_data.ndim == 3:
+            input_tmp = input_data[:, :, 0]
+        else:
+            input_tmp = input_data
             
-
-        if True:
-            # input should be in shape (batch, length)
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-                
-            # [batch, length, dim]
-            emb = self.model(input_tmp, mask=False, features_only=True)['x']
-            # print(emb.shape)
+        # [batch, length, dim]
+        emb = self.model(input_tmp, mask=False, features_only=True)['x']
+        # print(emb.shape)
         return emb
