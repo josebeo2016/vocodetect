@@ -9,6 +9,10 @@ from torch.utils.data import DataLoader
 import yaml
 from tqdm import tqdm
 
+# try huggingface scheduler
+from transformers.optimization import Adafactor, AdafactorSchedule
+
+
 from model.wav2vec2_resnet import Model as wav2vec2_resnet
 from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
@@ -230,10 +234,11 @@ if __name__ == '__main__':
     %   | - audio_path
     '''
     # Hyperparameters
-    parser.add_argument('--batch_size', type=int, default=14)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--start_epoch', type=int, default=0)
-    parser.add_argument('--lr', type=float, default=0.000001)
+    parser.add_argument('--min_lr', type=float, default=0.00000001)
+    parser.add_argument('--max_lr', type=float, default=0.00001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--loss', type=str, default='weighted_CCE')
     parser.add_argument('--config', type=str, default='configs/config.yaml')
@@ -309,11 +314,13 @@ if __name__ == '__main__':
     if not os.path.exists('out'):
         os.mkdir('out')
     args = parser.parse_args()
- 
+    
+    # set random seed
+    torch.manual_seed(args.seed)
         
     # #define model saving path
     model_tag = 'model_{}_{}_{}_{}'.format(
-        args.loss, args.num_epochs, args.batch_size, args.lr)
+        args.loss, args.num_epochs, args.batch_size, args.min_lr)
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
     model_save_path = os.path.join('out', model_tag)
@@ -341,8 +348,9 @@ if __name__ == '__main__':
     print('nb_params:',nb_params)
 
     #set Adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr*1000,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr, max_lr=args.lr*1000, cycle_momentum=False)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.max_lr,weight_decay=args.weight_decay)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
     
     # load state dict
     if args.model_path:
@@ -406,7 +414,7 @@ if __name__ == '__main__':
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
-        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.lr, optimizer, device, config)
+        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.min_lr, optimizer, device, config)
         val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, model, device, config)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
