@@ -20,6 +20,7 @@ from model.wav2vec2_linear import Model as wav2vec2_linear
 from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
 from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
 from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
+from model.wav2vec2_mixup_linear import Model as wav2vec2_mixup_linear
 try:
     from model.wav2vec2_btse import wav2vec2_btse
 except:
@@ -77,7 +78,8 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         # print("batch_y.shape", batch_y.shape)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
         batch_out, batch_feat, batch_emb = model(batch_x)
-        losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+        # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+        losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config)
         for key, value in losses.items():
             train_loss += value
             train_loss_detail[key] = train_loss_detail.get(key, 0) + value.item()

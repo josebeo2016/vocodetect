@@ -149,7 +149,6 @@ class Dataset_for(Dataset):
         batch_data = Tensor(batch_data)
         # label is 1 for anchor and positive, 0 for vocoded
         label = [1] * (len(augmented_audios) +len(additional_audios) + 1) + [0] * (len(self.vocoders*2) +  len(additional_spoofs))
-        # print("label", label)
         return self.list_IDs[idx], batch_data, Tensor(label)
 
 class Dataset_for_eval(Dataset):
