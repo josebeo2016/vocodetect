@@ -254,25 +254,34 @@ class Model(nn.Module):
         
         # mixup phase
         new_labels = None
-        if self.is_train:
+        if (self.is_train):
             feats, new_labels = harder_mixup.mixup(feats, labels)
+            emb = emb.unsqueeze(-1)
+            emb, _ = harder_mixup.mixup(emb, labels)
+            emb = emb.squeeze(-1)
+            new_bzs = labels.shape[0]
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
-        L_CE = 1/real_bzs *loss_CE(output, labels)
+        L_CE = 1/real_bzs * loss_CE(output, labels)
         
         # reshape the feats to match the supcon loss format
         feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
         if self.is_train:
-            L_CF1 = 1/real_bzs * supcon_loss(feats, labels=new_labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+            L_CF1 = 1/new_bzs * supcon_loss(feats, labels=new_labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         else:
             L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        if self.is_train:
+            L_CF2 = 1/new_bzs *supcon_loss(emb, labels=new_labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        else:
+            L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+            
         
         if config['model']['loss_type'] == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
