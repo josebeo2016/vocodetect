@@ -86,7 +86,8 @@ def sim_metric_seq(mat1, mat2):
     return torch.bmm(mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
 def supcon_loss(input_feat, 
                labels = None, mask = None, sim_metric = sim_metric_seq, 
-               t=0.07, contra_mode='all', length_norm=False):
+               t=0.07, contra_mode='all', length_norm=False,
+               weight = None):
     """
     loss = SupConLoss(feat, 
                       labels = None, mask = None, sim_metric = None, 

@@ -159,7 +159,7 @@ class Model(nn.Module):
             
             return self._forward(x_big)
         
-    def loss(self, output, feats, emb, labels, config):
+    def loss(self, output, feats, emb, labels, config, info=None):
         
         real_bzs = output.shape[0]
         n_views = 1.0

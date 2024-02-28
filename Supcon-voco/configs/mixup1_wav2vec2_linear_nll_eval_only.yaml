@@ -28,4 +28,4 @@ mixup:
   random_mix: true
   tau: 0.07
   is_norm: true
-  n_synthetic: 2
+  n_synthetic: 8

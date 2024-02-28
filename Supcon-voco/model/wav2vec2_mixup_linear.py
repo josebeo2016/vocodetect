@@ -139,7 +139,8 @@ class HardNegativeMixup():
         '''
         device = feats.device
         # check number of negative samples
-        n_neg_samples = torch.sum(labels == labels[0]).item()
+        n_neg_samples = torch.sum(labels != labels[0]).item()
+        # print('n_neg_samples', n_neg_samples)
         assert n_neg_samples > self.n_synthetic, "Not enough negative samples"
         
         # get the indices of the hard negative samples
@@ -147,7 +148,7 @@ class HardNegativeMixup():
         
         # generate the synthetic samples
         synthetic_samples = []
-        for i in range(n_neg_samples):
+        for i in range(self.n_synthetic):
             if self.random_mix:
                 self.alpha = random.uniform(0, 1)
             else:
@@ -160,19 +161,25 @@ class HardNegativeMixup():
             # get the two negative samples
             neg_sample1 = feats[hard_neg_idx[idx[0]]]
             neg_sample2 = feats[hard_neg_idx[idx[1]]]
+            # print('neg_sample1', neg_sample1.shape)
+            # print('neg_sample2', neg_sample2)
             # mix the two negative samples
             synthetic_sample = self.alpha * neg_sample1 + (1 - self.alpha) * neg_sample2
-            
+            # print('synthetic_sample', synthetic_sample.shape)
             if self.is_norm:
                 # apply l2 normalization
-                synthetic_sample = F.normalize(synthetic_sample, dim=-1)
+                if (synthetic_sample.shape[1] == 1):
+                    # when feature is 1D
+                    synthetic_sample = F.normalize(synthetic_sample, dim=0)
+                else:
+                    synthetic_sample = F.normalize(synthetic_sample, dim=1)
             
             synthetic_samples.append(synthetic_sample)
         
         # concatenate the synthetic samples with the original samples
         synthetic_samples = torch.stack(synthetic_samples)
         new_feats = torch.cat((feats, synthetic_samples), dim=0)
-        new_labels = torch.cat((labels, torch.zeros(n_neg_samples).to(device)))
+        new_labels = torch.cat((labels, torch.zeros(self.n_synthetic).to(device)))
         
         return new_feats, new_labels
         
@@ -239,7 +246,7 @@ class Model(nn.Module):
             return self._forward(x_big)
         
     
-    def loss(self, output, feats, emb, labels, config):
+    def loss(self, output, feats, emb, labels, config, info=None):
         
         real_bzs = output.shape[0]
         n_views = 1.0
@@ -259,7 +266,12 @@ class Model(nn.Module):
             emb = emb.unsqueeze(-1)
             emb, _ = harder_mixup.mixup(emb, labels)
             emb = emb.squeeze(-1)
-            new_bzs = labels.shape[0]
+            new_bzs = new_labels.shape[0]
+            # print('emb', emb)
+            # print('new_bzs', new_bzs)
+            # print('real_bzs', real_bzs)
+            # print('new_labels', new_labels)
+            # print('labels', labels)
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
@@ -281,6 +293,20 @@ class Model(nn.Module):
             L_CF2 = 1/new_bzs *supcon_loss(emb, labels=new_labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         else:
             L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+            
+        # save the features for visualization
+        # check the ./feats/ folder
+        feat_dir = os.path.join('./feats/','{}_{}'.format(config['data']['name'], config['mixup']['n_synthetic']))
+        if (os.path.exists('./feats') == False):
+            os.mkdir('./feats')
+        if (os.path.exists(feat_dir) == False):
+            os.mkdir(feat_dir)
+        if (self.is_train):
+            # print("Saving features")
+            save_path = os.path.join(feat_dir,info[0]+'.pt')
+            emb = emb.detach().cpu().numpy()
+            torch.save(emb, save_path)
+            
             
         
         if config['model']['loss_type'] == 1:
