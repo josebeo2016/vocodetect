@@ -9,49 +9,11 @@ from torch import Tensor
 import fairseq
 import os
 from model.loss_metrics import supcon_loss
-from torch.nn.functional import cosine_similarity
+from .xlsr import SSLModel
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
 
-############################
-## FOR fine-tuned SSL MODEL
-############################
-
-BASE_DIR=os.path.dirname(os.path.abspath(__file__))
-
-class SSLModel(nn.Module):
-    def __init__(self,device):
-        super(SSLModel, self).__init__()
-        
-        cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')
-        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
-        self.model = model[0]
-        self.device=device
-
-        self.out_dim = 1024
-        return
-
-    def extract_feat(self, input_data):
-        
-        # put the model to GPU if it not there
-        if next(self.model.parameters()).device != input_data.device \
-           or next(self.model.parameters()).dtype != input_data.dtype:
-            self.model.to(input_data.device, dtype=input_data.dtype)
-            self.model.train()
-
-        
-        if True:
-            # input should be in shape (batch, length)
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-                
-            # [batch, length, dim]
-            emb = self.model(input_tmp, mask=False, features_only=True)['x']
-            # print(emb.shape)
-        return emb
 class DropoutForMC(nn.Module):
     """Dropout layer for Bayesian model
     THe difference is that we do dropout even in eval stage
@@ -87,15 +49,19 @@ class BackEnd(nn.Module):
         self.m_frame_level = nn.Sequential(
             nn.Linear(self.in_dim, self.in_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
             nn.Linear(self.in_dim, self.in_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
             nn.Linear(self.in_dim, self.out_dim),
             nn.LeakyReLU(),
-            DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
+            torch.nn.Dropout(self.m_mcdp_rate)
+        )
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
 
         # linear layer to produce output logits 
         self.m_utt_level = nn.Linear(self.out_dim, self.num_class)
@@ -134,8 +100,6 @@ class Model(nn.Module):
         self.flag_fix_ssl = args['flag_fix_ssl']
         self.contra_mode = args['contra_mode']
         self.loss_type = args['loss_type']
-        self.K = args['K']
-        self.S = args['S']
         ####
         # create network wav2vec 2.0
         ####
@@ -147,7 +111,7 @@ class Model(nn.Module):
         self.selu = nn.SELU(inplace=True)
         
         self.loss_CE = nn.CrossEntropyLoss()
-        self.backend = BackEnd(128, 128, 2, 0.5, True)
+        self.backend = BackEnd(128, 128, 2, 0.5, False)
         
         self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
             mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
@@ -155,30 +119,39 @@ class Model(nn.Module):
         
     def _forward(self, x):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
-
-        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
+        if self.flag_fix_ssl:
+            with torch.no_grad():
+                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+        else:
+            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
         x = nn.ReLU()(x)
         
-        # post-processing on front-end features
-        # x = x.transpose(1, 2)   #(bs,feat_out_dim,frame_number)
+        # output [batch, 2]
+        # emb [batch, 128]
         output, emb = self.backend(x)
+        output = F.log_softmax(output, dim=1)
         if (self.is_train):
             return output, feats, emb
         return output
     
     def forward(self, x_big):
-        
+        # make labels to be a tensor of [bz]
+        # labels = labels.squeeze(0)
+
         if (self.is_train):
             # x_big is a tensor of [1, length, bz]
             # convert to [bz, length]
-            x_big = x_big.squeeze(0).transpose(0,1)
+            # x_big = x_big.squeeze(0).transpose(0,1)
             output, feats, emb = self._forward(x_big)
+            # calculate the loss
             return output, feats, emb
         else:
             # in inference mode, we don't need the emb
             # the x_big now is a tensor of [bz, length]
+            print("Inference mode")
+            
             return self._forward(x_big)
         
     
@@ -186,85 +159,34 @@ class Model(nn.Module):
         
         real_bzs = output.shape[0]
         n_views = 1.0
+        loss_CE = torch.nn.CrossEntropyLoss()
+        
+        sim_metric_seq = lambda mat1, mat2: torch.bmm(
+            mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
-        # print("feats.shape", feats.shape)
-        # print("emb.shape", emb.shape)
-        L_CE = self.loss_CE(output, labels)
+        L_CE = 1/real_bzs *loss_CE(output, labels)
         
+        # reshape the feats to match the supcon loss format
+        feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        L_CF1 = 1/real_bzs * loss_SCL(feats, K=self.K, S=self.S)
+        L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
+        # reshape the emb to match the supcon loss format
+        emb = emb.unsqueeze(1)
+        emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = 1/real_bzs * loss_SCL(emb, K=self.K, S=self.S)
-        if self.loss_type == 1:
+        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        
+        if config['model']['loss_type'] == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
-        elif self.loss_type == 2:
+        elif config['model']['loss_type'] == 2:
             return {'L_CE':L_CE, 'L_CF1':L_CF1}
-        elif self.loss_type == 3:
+        elif config['model']['loss_type'] == 3:
             return {'L_CE':L_CE, 'L_CF2':L_CF2}
-        
-def sim_metric_seq(mat1, mat2):
-    if len(mat1.shape) == 2:
-        mat1 = mat1.unsqueeze(-1)
-        mat2 = mat2.unsqueeze(-1)
-    return torch.bmm(mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
-def loss_SCL(batch, K, S, t=0.07):
-    """
-    Computes the loss based on the given input batch, K, and S.
-
-    Args:
-    - batch (torch.Tensor): Input batch tensor of shape [1 + K + M + S, H ...]
-    - K (int): Number of augmented samples
-    - S (int): Number of negative samples
-
-    Returns:
-    - loss (torch.Tensor): Computed loss value
-    """
-    bsz = batch.shape[0]  # Get batch size
-    device = batch.device  # Get device
-
-    M = len(batch) - 1 - K - S  # Calculate the number of other real samples
-    remove_rows = list(range(bsz))
-    remove_rows[1:1+K+M] = [] # positive sample rows
-    
-    logits_mat = sim_metric_seq(batch, batch)
-    # print("logits_mat\n", logits_mat)
-    logits_mat = logits_mat[remove_rows]
-    self_mask = torch.ones((bsz,bsz))
-    self_mask.diagonal().fill_(0) # mask on each data itself
-    self_mask[:,0].fill_(0) # no need to compute the loss of the anchor
-    self_mask = self_mask[remove_rows]
-    # print("self_mask\n",self_mask)
-    self_mask = self_mask.to(device)
-    # Numerous stability improvements
-    logits_max, _ = torch.max(logits_mat * self_mask, dim=1, keepdim=True)
-    logits_mat_ = logits_mat - logits_max.detach()
-    # compute log_prob
-    exp_logits = torch.exp(logits_mat_ * self_mask) * self_mask
-    # divide by the sum of exp_logits along the row
-    log_prob = logits_mat_ - torch.log(exp_logits.sum(1, keepdim=True))
-    # print("log_prob\n", log_prob)
-    
-    mask_ = torch.ones((bsz,bsz))
-    mask_.diagonal().fill_(0) 
-    # mask_[1:1+K+M,:].fill_(0) # mask on augmented and positive samples
-    mask_[0,1+K+M:].fill_(0) # mask on anchor to negative samples
-    mask_[1+K+M:,1:1+K+M].fill_(0) # mask on negative samples to augmented and positive samples
-    mask_ = mask_.to(device)
-    
-    # print("remove_rows", remove_rows)   
-    
-    mask_ = mask_[remove_rows]
-    # log_prob = log_prob[remove_rows]
-    # print("mask_\n", mask_)
-    
-    mean_log_prob_pos = (mask_ * log_prob).sum(1) / mask_.sum(1)
-    # print("mean_log_prob_pos.shape", mean_log_prob_pos.shape)
-    # print(mean_log_prob_pos)
-    # loss
-    loss = - mean_log_prob_pos
-    loss = loss.mean()
-
-    return loss
+        # ablation study
+        elif config['model']['loss_type'] == 4:
+            return {'L_CE':L_CE}
+        elif config['model']['loss_type'] == 5:
+            return {'L_CF1':L_CF1, 'L_CF2':L_CF2}

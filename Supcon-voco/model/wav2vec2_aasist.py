@@ -8,7 +8,12 @@ import torch.nn.functional as F
 from torch import Tensor
 import fairseq
 import os
-
+try:
+    from model.loss_metrics import supcon_loss
+    from model.xlsr import SSLModel
+except:
+    from .loss_metrics import supcon_loss
+    from .xlsr import SSLModel
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
@@ -16,42 +21,6 @@ __email__ = "tak@eurecom.fr"
 ############################
 ## FOR fine-tuned SSL MODEL
 ############################
-
-BASE_DIR=os.path.dirname(os.path.abspath(__file__))
-
-class SSLModel(nn.Module):
-    def __init__(self,device):
-        super(SSLModel, self).__init__()
-        
-        cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')
-        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
-        self.model = model[0]
-        self.device=device
-
-        self.out_dim = 1024
-        return
-
-    def extract_feat(self, input_data):
-        
-        # put the model to GPU if it not there
-        if next(self.model.parameters()).device != input_data.device \
-           or next(self.model.parameters()).dtype != input_data.dtype:
-            self.model.to(input_data.device, dtype=input_data.dtype)
-            self.model.train()
-
-        
-        if True:
-            # input should be in shape (batch, length)
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-                
-            # [batch, length, dim]
-            emb = self.model(input_tmp, mask=False, features_only=True)['x']
-            # print(emb.shape)
-        return emb
-
 
 #---------AASIST back-end------------------------#
 ''' Jee-weon Jung, Hee-Soo Heo, Hemlata Tak, Hye-jin Shim, Joon Son Chung, Bong-Jin Lee, Ha-Jin Yu and Nicholas Evans. 
@@ -434,17 +403,20 @@ class Residual_block(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, args,device,emb = True):
+    def __init__(self, args,device, is_train = True):
         super().__init__()
         self.device = device
-        self.emb = emb
+        self.is_train = is_train
+        self.flag_fix_ssl = args['flag_fix_ssl']
+        self.contra_mode = args['contra_mode']
+        self.loss_type = args['loss_type']
         
         # AASIST parameters
         filts = args['aasist']['filts']
         gat_dims = args['aasist']['gat_dims']
         pool_ratios = args['aasist']['pool_ratios']
         temperatures =  args['aasist']['temperatures']
-
+    
 
         ####
         # create network wav2vec 2.0
@@ -509,9 +481,14 @@ class Model(nn.Module):
         self.out_layer = nn.Linear(5 * gat_dims[1], args['aasist']['nclasses'])
 
     def forward(self, x):
-        #-------pre-trained Wav2vec model fine tunning ------------------------##
-        x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1))
+       #-------pre-trained Wav2vec model fine tunning ------------------------##
+        if self.flag_fix_ssl:
+            with torch.no_grad():
+                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+        else:
+            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+        feats = x
         
         # post-processing on front-end features
         x = x.transpose(1, 2)   #(bs,feat_out_dim,frame_number)
@@ -598,7 +575,41 @@ class Model(nn.Module):
         
         last_hidden = self.drop(last_hidden)
         output = self.out_layer(last_hidden)
-        if (self.emb):
-            return output, last_hidden
-        
+        if (self.is_train):
+            return output, feats, last_hidden
         return output
+    def loss(self, output, feats, emb, labels, config, info=None):
+        
+        real_bzs = output.shape[0]
+        n_views = 1.0
+        loss_CE = torch.nn.CrossEntropyLoss()
+        
+        sim_metric_seq = lambda mat1, mat2: torch.bmm(
+            mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
+        
+        # print("output.shape", output.shape)
+        # print("labels.shape", labels.shape)
+        L_CE = 1/real_bzs *loss_CE(output, labels)
+        
+        # reshape the feats to match the supcon loss format
+        feats = feats.unsqueeze(1)
+        # print("feats.shape", feats.shape)
+        L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        
+        # reshape the emb to match the supcon loss format
+        emb = emb.unsqueeze(1)
+        emb = emb.unsqueeze(-1)
+        # print("emb.shape", emb.shape)
+        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        
+        if config['model']['loss_type'] == 1:
+            return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
+        elif config['model']['loss_type'] == 2:
+            return {'L_CE':L_CE, 'L_CF1':L_CF1}
+        elif config['model']['loss_type'] == 3:
+            return {'L_CE':L_CE, 'L_CF2':L_CF2}
+        # ablation study
+        elif config['model']['loss_type'] == 4:
+            return {'L_CE':L_CE}
+        elif config['model']['loss_type'] == 5:
+            return {'L_CF1':L_CF1, 'L_CF2':L_CF2}

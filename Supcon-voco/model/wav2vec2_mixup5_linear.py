@@ -119,13 +119,14 @@ class HardNegativeMixup():
         '''
         # get the similarity matrix
         sim_matrix = torch.div(self.sim_metric_seq(feats, feats), self.tau)
-        
         # get the similarity scores of the negative samples to the anchor
         anchor_sim = sim_matrix[0, :]
-        # sort the similarity scores in ascending order
+        # sort the similarity scores in descending order
         _, idx = torch.sort(anchor_sim, descending = True)
-        # get the negative samples' indices
-        idx = idx[labels == labels[0]]
+        # map the label to the index
+        sort_labels = labels[idx]
+        # get the indices of the hard negative samples
+        idx = idx[sort_labels != labels[0]]
         return idx
 
     
@@ -146,7 +147,6 @@ class HardNegativeMixup():
         
         # get the indices of the hard negative samples
         hard_neg_idx = self.get_hard_negative_idx(feats, labels)
-        
         # generate the synthetic samples
         synthetic_samples = []
         for i in range(self.n_synthetic):
@@ -295,16 +295,16 @@ class Model(nn.Module):
             
         # save the features for visualization
         # check the ./feats/ folder
-        # feat_dir = os.path.join('./feats/','{}_{}'.format(config['data']['name'], config['mixup']['n_synthetic']))
-        # if (os.path.exists('./feats') == False):
-        #     os.mkdir('./feats')
-        # if (os.path.exists(feat_dir) == False):
-        #     os.mkdir(feat_dir)
-        # if (self.is_train):
-        #     # print("Saving features")
-        #     save_path = os.path.join(feat_dir,info[0]+'.pt')
-        #     emb = emb.detach().cpu().numpy()
-        #     torch.save(emb, save_path)
+        feat_dir = os.path.join('./feats/','{}_{}'.format(config['data']['name'], config['mixup']['n_synthetic']))
+        if (os.path.exists('./feats') == False):
+            os.mkdir('./feats')
+        if (os.path.exists(feat_dir) == False):
+            os.mkdir(feat_dir)
+        if (self.is_train):
+            # print("Saving features")
+            save_path = os.path.join(feat_dir,info[0]+'.pt')
+            emb = emb.detach().cpu().numpy()
+            torch.save(emb, save_path)
             
             
         

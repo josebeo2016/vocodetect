@@ -108,6 +108,13 @@ class Dataset_for(Dataset):
         # Anchor real audio sample
         real_audio_file = os.path.join(self.bonafide_dir, self.list_IDs[idx])
         real_audio = self.load_audio(real_audio_file)
+        
+        # Augmented real samples as positive data
+        augmented_audios = []
+        for augment in self.augmentation_methods:
+            augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
+            # print("aug audio shape",augmented_audio.shape)
+            augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
 
         # Vocoded audio samples as negative data
         vocoded_audio_files = [os.path.join(self.vocoded_dir, vf + "_" + self.list_IDs[idx]) for vf in self.vocoders]
@@ -123,12 +130,7 @@ class Dataset_for(Dataset):
             augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
         
         
-        # Augmented real samples as positive data
-        augmented_audios = []
-        for augment in self.augmentation_methods:
-            augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
-            # print("aug audio shape",augmented_audio.shape)
-            augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
+        
 
         # Additional real audio samples as positive data
         idxs = list(range(len(self.list_IDs)))
