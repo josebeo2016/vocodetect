@@ -266,6 +266,7 @@ class Model(nn.Module):
             emb, _ = harder_mixup.mixup(emb, labels)
             emb = emb.squeeze(-1)
             new_bzs = new_labels.shape[0]
+            output = self.backend.m_utt_level(emb)
             # print('emb', emb)
             # print('new_bzs', new_bzs)
             # print('real_bzs', real_bzs)
@@ -274,7 +275,10 @@ class Model(nn.Module):
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
-        L_CE = 1/real_bzs * loss_CE(output, labels)
+        if self.is_train:
+            L_CE = 1/new_bzs * loss_CE(output, labels)
+        else:
+            L_CE = 1/real_bzs * loss_CE(output, labels)
         
         # reshape the feats to match the supcon loss format
         feats = feats.unsqueeze(1)

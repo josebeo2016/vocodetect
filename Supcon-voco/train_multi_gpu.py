@@ -23,6 +23,8 @@ from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
 from model.wav2vec2_mixup_linear import Model as wav2vec2_mixup_linear
 from model.wav2vec2_mixup4_linear import Model as wav2vec2_mixup4_linear
 from model.wav2vec2_mixup5_linear import Model as wav2vec2_mixup5_linear
+from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
+from model.wav2vec2_vib import Model as wav2vec2_vib
 # try:
 #     from model.wav2vec2_btse import wav2vec2_btse
 # except:
@@ -120,7 +122,8 @@ def evaluate_accuracy(dev_loader, model, device, config):
             batch_y = batch_y.view(-1).type(torch.int64).to(device)
             
             batch_out, batch_feat, batch_emb = model(batch_x)
-            losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+            # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
+            losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config, info)
             for key, value in losses.items():
                 loss_value += value
                 val_loss_detail[key] = val_loss_detail.get(key, 0) + value.item()

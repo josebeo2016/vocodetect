@@ -19,21 +19,22 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
         l_meta = f.readlines()
     if (is_train):
         for line in l_meta:
-            key, subset, label = line.strip().split()
+
+            key, subset, _, label = line.strip().split()
             if (subset == 'train'):
                 file_list.append(key)
                 d_meta[key] = 1 if label == 'bonafide' else 0
         return d_meta, file_list
     if (is_dev):
         for line in l_meta:
-            key, subset, label = line.strip().split()
+            key, subset, _, label = line.strip().split()
             if (subset == 'dev'):
                 file_list.append(key)
                 d_meta[key] = 1 if label == 'bonafide' else 0
         return d_meta, file_list
     if (is_eval):
         for line in l_meta:
-            key, subset, label = line.strip().split()
+            key, subset, _, label = line.strip().split()
             if (subset == 'eval' or subset == 'hidden' or subset == 'progress' or subset == 'test'):
                 file_list.append(key)
         return [], file_list

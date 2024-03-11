@@ -150,5 +150,6 @@ neuralcodecs/la2019_bona
 
 traindata/asvspoof_2019_supcon/spoof_train/
 traindata/asvspoof_2019_supcon/spoof_dev/
+traindata/asvspoof_2019_supcon/spoof/
 
 .vscode/
