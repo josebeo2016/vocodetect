@@ -25,6 +25,7 @@ from model.wav2vec2_mixup4_linear import Model as wav2vec2_mixup4_linear
 from model.wav2vec2_mixup5_linear import Model as wav2vec2_mixup5_linear
 from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
 from model.wav2vec2_vib import Model as wav2vec2_vib
+from model.wav2vec2_coaasist import W2V2_COAASIST as wav2vec2_coaasist
 # try:
 #     from model.wav2vec2_btse import wav2vec2_btse
 # except:
