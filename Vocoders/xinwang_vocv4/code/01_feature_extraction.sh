@@ -12,10 +12,11 @@ PRJDIR=$PWD
 # input waveform directory
 # here, we use a toy subset from asvspoof19_bona for demonstration
 # you may also try $PRJDIR/../data/voxceleb2/dev
-INPUTWAVDIR=$PRJDIR/../../traindata/CNSL_intern/norm/
+# INPUTWAVDIR=$PRJDIR/../../traindata/vctk/wav/
+INPUTWAVDIR=/datab/Dataset/cnsl_real_fake_audio/VCTK/wav/
 
 # output feature directory
-OUTFEATDIR=$PRJDIR/../data-feat/cnsl_intern/
+OUTFEATDIR=$PRJDIR/../data-feat/vctk/
 
 # path to save a file list
 SCPLIST=$OUTFEATDIR/file.lst
@@ -23,7 +24,7 @@ SCPLIST=$OUTFEATDIR/file.lst
 
 # load environment
 eval "$(conda shell.bash hook)"
-conda activate py39
+# conda activate py39
 export PYTHONPATH=$PWD/project-NN-Pytorch-scripts:${PYTHONPATH}
 
 mkdir -p ${OUTFEATDIR}

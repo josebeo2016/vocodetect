@@ -177,7 +177,7 @@ class HardNegativeMixup():
         # concatenate the synthetic samples with the original samples
         synthetic_samples = torch.stack(synthetic_samples)
         new_feats = torch.cat((feats, synthetic_samples), dim=0)
-        new_labels = torch.cat((labels, torch.zeros(self.n_synthetic).to(device)))
+        new_labels = torch.cat((labels, torch.zeros(self.n_synthetic).to(device, dtype=torch.long)))
         
         return new_feats, new_labels
         
@@ -261,32 +261,29 @@ class Model(nn.Module):
         # mixup phase
         new_labels = None
         if (self.is_train):
-            feats, new_labels = harder_mixup.mixup(feats, labels)
+            # feats, new_labels = harder_mixup.mixup(feats, labels)
             emb = emb.unsqueeze(-1)
-            emb, _ = harder_mixup.mixup(emb, labels)
+            emb, new_labels = harder_mixup.mixup(emb, labels)
+            # print("new labels: ", new_labels)
             emb = emb.squeeze(-1)
             new_bzs = new_labels.shape[0]
             output = self.backend.m_utt_level(emb)
             # print('emb', emb)
             # print('new_bzs', new_bzs)
             # print('real_bzs', real_bzs)
-            # print('new_labels', new_labels)
-            # print('labels', labels)
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
         if self.is_train:
-            L_CE = 1/new_bzs * loss_CE(output, labels)
+            L_CE = 1/new_bzs * loss_CE(output, new_labels)
         else:
             L_CE = 1/real_bzs * loss_CE(output, labels)
         
         # reshape the feats to match the supcon loss format
         feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        if self.is_train:
-            L_CF1 = 1/new_bzs * supcon_loss(feats, labels=new_labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
-        else:
-            L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+
+        L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)

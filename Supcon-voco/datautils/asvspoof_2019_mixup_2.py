@@ -82,6 +82,8 @@ class Dataset_for(Dataset):
         # list available spoof samples (only .wav files)
         self.spoof_dir = os.path.join(base_dir, 'spoof')
         self.spoof_list = [f for f in os.listdir(self.spoof_dir) if os.path.isfile(os.path.join(self.spoof_dir, f)) and (f.endswith('.wav') or f.endswith('.flac'))]
+        # add more sample from vocoded_dir to spoof_list
+        self.spoof_list += [f for f in os.listdir(self.vocoded_dir) if os.path.isfile(os.path.join(self.vocoded_dir, f)) and (f.endswith('.wav') or f.endswith('.flac'))]
         self.repeat_pad = repeat_pad
         self.trim_length = trim_length
         self.sample_rate = wav_samp_rate

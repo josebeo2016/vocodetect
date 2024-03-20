@@ -237,7 +237,8 @@ class Model(nn.Module):
         # print("BCE: ", BCE)
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         # print("KLD: ", KLD)
-        Recon_loss = 0.000001*(BCE + 0.05*KLD) / real_bzs
+        # Recon_loss = 0.000001*(BCE + 0.05*KLD) / real_bzs
+        Recon_loss = config['model']['recon_weight_l']*(BCE + config['model']['recon_weight_b']*KLD) / real_bzs
         # reshape the feats_w2v to match the supcon loss format
         feats_w2v = feats_w2v.unsqueeze(1)
         # print("feats_w2v.shape", feats_w2v.shape)
