@@ -5,7 +5,7 @@ model:
   contra_mode: 'all' # 'one' or 'all'
   loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
   recon_weight_l: 0.000001
-  recon_weight_b: 0.1
+  recon_weight_b: 0.05
 data:
   name: 'asvspoof_2019_augall_5'
   kwargs:
