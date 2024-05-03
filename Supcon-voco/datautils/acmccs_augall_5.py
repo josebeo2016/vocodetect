@@ -134,8 +134,6 @@ class Dataset_for(Dataset):
             augmented_vocoded_audio = globals()[self.augmentation_methods[0]](vocoded_audio, self.args, self.sample_rate, audio_path = vf)
             augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
         
-        
-        
         # Augmented real samples as positive data
         augmented_audios = []
         for augment in self.augmentation_methods:
@@ -188,7 +186,7 @@ class Dataset_for_eval(Dataset):
 
 
 # ------------------audio augmentor wrappers---------------------------##
-from .audio_augmentor import BackgroundNoiseAugmentor, PitchAugmentor, ReverbAugmentor, SpeedAugmentor, VolumeAugmentor, TelephoneEncodingAugmentor
+from .audio_augmentor import BackgroundNoiseAugmentor, PitchAugmentor, ReverbAugmentor, SpeedAugmentor, VolumeAugmentor, TelephoneEncodingAugmentor, GaussianAugmentor
 from .audio_augmentor.utils import pydub_to_librosa, librosa_to_pydub
 
 def background_noise(args, filename, online = False):
@@ -313,6 +311,25 @@ def telephone(args, filename, online = False):
         return pydub_to_librosa(audio)
     else:
         ta.save()
+        
+def gaussian_noise(args, filename, online = False):
+    # load audio:
+    in_file = os.path.join(args.input_path, filename)
+    config = {
+        "aug_type": "guassian_noise",
+        "output_path": args.output_path,
+        "out_format": args.out_format,
+        "min_amplitude": 0.001,
+        "max_amplitude": 0.015
+    }
+    gn = GaussianAugmentor(config)
+    gn.load(in_file)
+    gn.transform()
+    if online:
+        audio = gn.augmented_audio
+        return pydub_to_librosa(audio)
+    else:
+        gn.save()
 
 def background_noise_wrapper(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
@@ -409,6 +426,27 @@ def telephone_wrapper(x, args, sr=16000, audio_path = None):
     
     if (args.online_aug):
         waveform = telephone(args, utt_id, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            telephone(args, utt_id)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        
+def gaussian_noise_wrapper(x, args, sr=16000, audio_path = None):
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path)
+    aug_audio_path = os.path.join(aug_dir, 'gaussian_noise', utt_id)
+    args.output_path = os.path.join(aug_dir, 'gaussian_noise')
+    args.out_format = 'wav'
+    args.input_path = os.path.dirname(audio_path)
+    
+    if (args.online_aug):
+        waveform = gaussian_noise(args, utt_id, online=True)
         # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
         return waveform
     else:
