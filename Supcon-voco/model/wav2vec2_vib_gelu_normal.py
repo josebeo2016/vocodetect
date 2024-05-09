@@ -8,14 +8,8 @@ import torch.nn.functional as F
 from torch import Tensor
 import fairseq
 import os
-try:
-    from model.loss_metrics import supcon_loss
-    from model.xlsr import SSLModel
-except:
-    from loss_metrics import supcon_loss
-    from xlsr import SSLModel
-# from .xlsr_small import SSLModel
-
+from model.loss_metrics import supcon_loss
+from .xlsr import SSLModel
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
@@ -153,9 +147,7 @@ class Model(nn.Module):
         ####
         # create network wav2vec 2.0
         ####
-        # self.ssl_model = SSLModel(self.device)
-        self.ssl_model = SSLModel(self.device, num_layers=args['xlsr']['num_layers'], order=args['xlsr']['order'], custom_order=args['xlsr']['custom_order'])
-        
+        self.ssl_model = SSLModel(self.device)
         self.LL = nn.Linear(self.ssl_model.out_dim, 128)
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.first_bn1 = nn.BatchNorm2d(num_features=64)
@@ -250,16 +242,16 @@ class Model(nn.Module):
         # reshape the feats_w2v to match the supcon loss format
         feats_w2v = feats_w2v.unsqueeze(1)
         # print("feats_w2v.shape", feats_w2v.shape)
-        L_CF1 = 1/real_bzs * supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        # L_CF1 = 1/real_bzs * supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        # L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         if config['model']['loss_type'] == 1:
-            return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2, 'Recon_loss':Recon_loss}
+            return {'L_CE':L_CE, 'Recon_loss':Recon_loss}
         elif config['model']['loss_type'] == 2:
             return {'L_CE':L_CE, 'L_CF1':L_CF1}
         elif config['model']['loss_type'] == 3:
@@ -269,4 +261,3 @@ class Model(nn.Module):
             return {'L_CE':L_CE}
         elif config['model']['loss_type'] == 5:
             return {'L_CF1':L_CF1, 'L_CF2':L_CF2}
-        

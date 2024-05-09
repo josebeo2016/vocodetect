@@ -8,7 +8,10 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 import yaml
 from tqdm import tqdm
-
+import importlib
+import time
+from core_scripts.startup_config import set_random_seed
+# Models
 from model.wav2vec2_resnet import Model as wav2vec2_resnet
 from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
 from model.wav2vec2_aasist import Model as wav2vec2_aasist
@@ -23,17 +26,21 @@ from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
 from model.wav2vec2_vib import Model as wav2vec2_vib
 from model.wav2vec2_linear_nll_gelu import Model as wav2vec2_linear_nll_gelu
 from model.wav2vec2_vib_gelu import Model as wav2vec2_vib_gelu
+from model.wav2vec2_vib_gelu_normal import Model as wav2vec2_vib_gelu_normal
 from model.wav2vec2_coaasist import W2V2_COAASIST as wav2vec2_coaasist
 # try:
 #     from model.wav2vec2_btse import wav2vec2_btse
 # except:
 #     print("No dependency for wav2vec2_btse. Please switch to conda env bio")
 from model.wav2vec2_btse import wav2vec2_btse
-import importlib
-import time
 
-from model.loss_metrics import loss_custom
+# from model.loss_metrics import loss_custom
 from tensorboardX import SummaryWriter
+
+# LoRA
+from peft import LoraConfig, TaskType
+import peft
+from peft import PeftModel
 
 __author__ = "PhucDT"
 __reference__ = "Hemlata Tak"
@@ -58,9 +65,10 @@ class EarlyStop:
             print("Best epoch: {}".format(epoch))
             self.best_score = score
             self.counter = 0
-            # save model here
-            torch.save(model.state_dict(), os.path.join(
-                self.save_dir, 'epoch_{}.pth'.format(epoch)))
+            # # save model here
+            # torch.save(model.state_dict(), os.path.join(
+            #     self.save_dir, 'epoch_{}.pth'.format(epoch)))
+            model.save_pretrained(os.path.join(self.save_dir, 'epoch_{}.pth'.format(epoch)))
 
 def train_epoch(train_loader, model, lr, optimizer, device, config):
     model.train() 
@@ -231,7 +239,8 @@ def produce_prediction_file(dataset, model, device, save_path, batch_size=10):
             fh.close()   
     print('Scores saved to {}'.format(save_path))
 
-if __name__ == '__main__':
+    
+def main():
     parser = argparse.ArgumentParser(description='ASVspoof2021 baseline system')
     # Dataset
     parser.add_argument('--database_path', type=str, default='/your/path/to/data/', help='eval set')
@@ -259,6 +268,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--model_path', type=str,
                         default=None, help='Model checkpoint')
+    parser.add_argument('--lora_path', type=str,
+                        default=None, help='LoRA checkpoint')
     parser.add_argument('--comment', type=str, default=None,
                         help='Comment to describe the saved model')
     # Auxiliary arguments
@@ -323,10 +334,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # set random seed
-    torch.manual_seed(args.seed)
+    torch.set_random_seed(args.seed)
         
     # #define model saving path
-    model_tag = 'model_{}_{}_{}_{}'.format(
+    model_tag = 'model_{}_{}_{}_{}_lora'.format(
         args.loss, args.num_epochs, args.batch_size, args.min_lr)
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
@@ -343,6 +354,7 @@ if __name__ == '__main__':
     # load config file
     config = yaml.load(open(args.config, 'r'), Loader=yaml.FullLoader)
     
+    
     # dynamic load datautils based on name in config file
     genList = importlib.import_module('datautils.'+config['data']['name']).genList
     Dataset_for = importlib.import_module('datautils.'+config['data']['name']).Dataset_for
@@ -353,11 +365,10 @@ if __name__ == '__main__':
     nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
     model = model.to(device)
     print('nb_params:',nb_params)
-
-    #set Adam optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.max_lr,weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
+    
+    # for i in [(n, type(m)) for n, m in model.named_modules()][-50:]:
+    #     print(i)
+    # return
     
     # load state dict
     if args.model_path:
@@ -373,17 +384,33 @@ if __name__ == '__main__':
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
         print('Model initialized')
+        
+     # LoRA
+    lora_config = peft.LoraConfig(
+        r=config['lora']['r'],
+        target_modules=config['lora']['target_modules'],
+        modules_to_save=config['lora']['modules_to_save'],
+    )
+    peft_model = peft.get_peft_model(model, lora_config)
+    peft_model.print_trainable_parameters()
+      
+    # load LoRA model  
+    if args.lora_path:
+        peft_model = peft.PeftModel.from_pretrained(model, args.lora_path)
+        peft_model.to(device)
+        print('LoRA loaded')
+    
     #evaluation 
     if args.eval:
         _,file_eval = genList(dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=True)
         print('no. of eval trials',len(file_eval))
         eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'), padding_type=args.padding_type)
         if (args.predict):
-            produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
+            produce_prediction_file(eval_set, peft_model, device, args.eval_output, batch_size=args.batch_size)
         elif (args.emb):
-            produce_emb_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
+            produce_emb_file(eval_set, peft_model, device, args.eval_output, batch_size=args.batch_size)
         else:
-            produce_evaluation_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
+            produce_evaluation_file(eval_set, peft_model, device, args.eval_output, batch_size=args.batch_size)
         sys.exit(0)
    
      
@@ -411,8 +438,12 @@ if __name__ == '__main__':
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
-
+    #set Adam optimizer
+    optimizer = torch.optim.AdamW(peft_model.parameters(), lr=args.max_lr,weight_decay=args.weight_decay)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
     
+
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
@@ -421,8 +452,8 @@ if __name__ == '__main__':
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
         
-        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, model, args.min_lr, optimizer, device, config)
-        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, model, device, config)
+        running_loss, train_accuracy, train_loss_detail = train_epoch(train_loader, peft_model, args.min_lr, optimizer, device, config)
+        val_loss, val_accuracy, val_loss_detail = evaluate_accuracy(dev_loader, peft_model, device, config)
         writer.add_scalar('train_accuracy', train_accuracy, epoch)
         writer.add_scalar('val_accuracy', val_accuracy, epoch)
         writer.add_scalar('val_loss', val_loss, epoch)
@@ -434,9 +465,12 @@ if __name__ == '__main__':
         print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
         scheduler.step()
         # check early stopping
-        early_stopping(val_accuracy, model, epoch)
+        early_stopping(val_accuracy, peft_model, epoch)
         if early_stopping.early_stop:
             print("Early stopping activated.")
             break
         
     print("Total training time: {}s".format(time.time() - start_train_time))
+
+if __name__ == '__main__':
+    main()

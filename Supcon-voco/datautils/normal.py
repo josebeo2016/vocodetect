@@ -19,7 +19,6 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
         l_meta = f.readlines()
     if (is_train):
         for line in l_meta:
-
             key, subset, _, label = line.strip().split()
             if (subset == 'train'):
                 file_list.append(key)
@@ -76,7 +75,7 @@ def pad(x:np.ndarray, padding_type:str='zero', max_len=64000, random_start=False
 
 class Dataset_for(Dataset):
     def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
-                 augmentation_methods=[], num_additional_real=2, trim_length=64000, 
+                 augmentation_methods=[], num_additional_real=2, num_additional_spoof=1, trim_length=64000, 
                  wav_samp_rate=16000, noise_path=None, rir_path=None, aug_dir=None, 
                  online_aug=False, repeat_pad=True):
         """

@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 import yaml
 from tqdm import tqdm
 
+from core_scripts.startup_config import set_random_seed
+
 # try huggingface scheduler
 from transformers.optimization import Adafactor, AdafactorSchedule
 
@@ -327,7 +329,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # set random seed
-    torch.manual_seed(args.seed)
+    set_random_seed(args.seed)
+    # torch.manual_seed(args.seed)
         
     # #define model saving path
     model_tag = 'model_{}_{}_{}_{}'.format(
