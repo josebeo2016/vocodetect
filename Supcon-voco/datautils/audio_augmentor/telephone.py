@@ -13,11 +13,11 @@ from torchaudio.sox_effects import apply_effects_tensor as sox_fx
 logger = logging.getLogger(__name__)
 
 def apply_codec(waveform, sample_rate, format, encoder=None):
-    encoder = torchaudio.io.AudioEffector(format=format, encoder=encoder)
+    encoder = AudioEffector(format=format, encoder=encoder)
     return encoder.apply(waveform, sample_rate)
 
 def apply_effect(waveform, sample_rate, effect):
-    effector = torchaudio.io.AudioEffector(effect=effect)
+    effector = AudioEffector(effect=effect)
     return effector.apply(waveform, sample_rate)
 class TelephoneEncodingAugmentor(BaseAugmentor):
     """

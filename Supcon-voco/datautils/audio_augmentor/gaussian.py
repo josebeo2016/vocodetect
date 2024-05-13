@@ -36,7 +36,7 @@ class GaussianAugmentor(BaseAugmentor):
         """
         Transform the audio by adding gausian noise.
         """
-        noise = np.random.randn(self.data.shape).astype(np.float32)
+        noise = np.random.randn(self.data.shape[0]).astype(np.float32)
         data = self.data + self.amplitude * noise
         # transform to pydub audio segment
         self.augmented_audio = librosa_to_pydub(data, sr=self.sr)

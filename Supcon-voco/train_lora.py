@@ -11,28 +11,6 @@ from tqdm import tqdm
 import importlib
 import time
 from core_scripts.startup_config import set_random_seed
-# Models
-from model.wav2vec2_resnet import Model as wav2vec2_resnet
-from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
-from model.wav2vec2_aasist import Model as wav2vec2_aasist
-from model.wav2vec2_linear import Model as wav2vec2_linear 
-from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
-from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
-from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
-from model.wav2vec2_mixup_linear import Model as wav2vec2_mixup_linear
-from model.wav2vec2_mixup4_linear import Model as wav2vec2_mixup4_linear
-from model.wav2vec2_mixup5_linear import Model as wav2vec2_mixup5_linear
-from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
-from model.wav2vec2_vib import Model as wav2vec2_vib
-from model.wav2vec2_linear_nll_gelu import Model as wav2vec2_linear_nll_gelu
-from model.wav2vec2_vib_gelu import Model as wav2vec2_vib_gelu
-from model.wav2vec2_vib_gelu_normal import Model as wav2vec2_vib_gelu_normal
-from model.wav2vec2_coaasist import W2V2_COAASIST as wav2vec2_coaasist
-# try:
-#     from model.wav2vec2_btse import wav2vec2_btse
-# except:
-#     print("No dependency for wav2vec2_btse. Please switch to conda env bio")
-from model.wav2vec2_btse import wav2vec2_btse
 
 # from model.loss_metrics import loss_custom
 from tensorboardX import SummaryWriter
@@ -360,8 +338,10 @@ def main():
     Dataset_for = importlib.import_module('datautils.'+config['data']['name']).Dataset_for
     Dataset_for_eval = importlib.import_module('datautils.'+config['data']['name']).Dataset_for_eval
     
-    # dynamic load model based on name in config file
-    model = globals()[config['model']['name']](config['model'], device)
+   # dynamic load model based on name in config file
+    modelClass = importlib.import_module('model.'+config['model']['name']).Model
+    model = modelClass(config['model'], device)
+    # model = globals()[config['model']['name']](config['model'], device)
     nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
     model = model.to(device)
     print('nb_params:',nb_params)

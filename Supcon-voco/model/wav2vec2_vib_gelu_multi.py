@@ -197,7 +197,13 @@ class Model(nn.Module):
     def forward(self, x_big):
         # make labels to be a tensor of [bz]
         # labels = labels.squeeze(0)
-
+        if (x_big.dim() == 3):
+            x_big = x_big.transpose(0,1)
+            batch, length, sample_per_batch = x_big.shape
+            # x_big is a tensor of [length, batch, sample per batch]
+            # transform to [length, batch*sample per batch] by concat last dim
+            x_big = x_big.transpose(1,2)
+            x_big = x_big.reshape(batch * sample_per_batch, length)
         if (self.is_train):
             # x_big is a tensor of [1, length, bz]
             # convert to [bz, length]

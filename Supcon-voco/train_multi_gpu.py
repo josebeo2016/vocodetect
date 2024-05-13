@@ -11,25 +11,22 @@ from tqdm import tqdm
 
 from core_scripts.startup_config import set_random_seed
 
-# try huggingface scheduler
-from transformers.optimization import Adafactor, AdafactorSchedule
-
-
-from model.wav2vec2_resnet import Model as wav2vec2_resnet
-from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
-from model.wav2vec2_aasist import Model as wav2vec2_aasist
-from model.wav2vec2_linear import Model as wav2vec2_linear 
-from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
-from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
-from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
-from model.wav2vec2_mixup_linear import Model as wav2vec2_mixup_linear
-from model.wav2vec2_mixup4_linear import Model as wav2vec2_mixup4_linear
-from model.wav2vec2_mixup5_linear import Model as wav2vec2_mixup5_linear
-from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
-from model.wav2vec2_vib import Model as wav2vec2_vib
-from model.wav2vec2_linear_nll_gelu import Model as wav2vec2_linear_nll_gelu
-from model.wav2vec2_vib_gelu import Model as wav2vec2_vib_gelu
-from model.wav2vec2_coaasist import W2V2_COAASIST as wav2vec2_coaasist
+# from model.wav2vec2_resnet import Model as wav2vec2_resnet
+# from model.wav2vec2_resnet_contraall import Model as wav2vec2_resnet_contraall
+# from model.wav2vec2_aasist import Model as wav2vec2_aasist
+# from model.wav2vec2_linear import Model as wav2vec2_linear 
+# from model.wav2vec2_linear_nll_multi import Model as wav2vec2_linear_nll
+# from model.wav2vec2_resnet_nll import Model as wav2vec2_resnet_nll
+# from model.wav2vec2_linear_nll_4 import Model as wav2vec2_linear_nll_4
+# from model.wav2vec2_mixup_linear import Model as wav2vec2_mixup_linear
+# from model.wav2vec2_mixup4_linear import Model as wav2vec2_mixup4_linear
+# from model.wav2vec2_mixup5_linear import Model as wav2vec2_mixup5_linear
+# from model.wav2vec2_mixup6_linear import Model as wav2vec2_mixup6_linear
+# from model.wav2vec2_vib import Model as wav2vec2_vib
+# from model.wav2vec2_linear_nll_gelu import Model as wav2vec2_linear_nll_gelu
+# from model.wav2vec2_vib_gelu import Model as wav2vec2_vib_gelu
+# from model.wav2vec2_vib_gelu_multi import Model as wav2vec2_vib_gelu_multi
+# from model.wav2vec2_coaasist import W2V2_COAASIST as wav2vec2_coaasist
 # try:
 #     from model.wav2vec2_btse import wav2vec2_btse
 # except:
@@ -78,6 +75,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         train_loss = 0.0
         # print("training on anchor: ", info)
         # check number of dimension of batch_x
+        # print('batch_y', batch_y)
         batch_x = batch_x.to(device)
         if len(batch_x.shape) == 3:
             num_total +=batch_x.shape[2]
@@ -87,6 +85,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         
         # print("batch_y.shape", batch_y.shape)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
+        # print('batch_y', batch_y)
         batch_out, batch_feat, batch_emb = model(batch_x)
         # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
         losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config, info)
@@ -356,7 +355,9 @@ if __name__ == '__main__':
     Dataset_for_eval = importlib.import_module('datautils.'+config['data']['name']).Dataset_for_eval
     
     # dynamic load model based on name in config file
-    model = globals()[config['model']['name']](config['model'], device)
+    modelClass = importlib.import_module('model.'+config['model']['name']).Model
+    model = modelClass(config['model'], device)
+    # model = globals()[config['model']['name']](config['model'], device)
     nb_params = sum([param.view(-1).size()[0] for param in model.parameters()])
     model = model.to(device)
     print('nb_params:',nb_params)
@@ -401,7 +402,7 @@ if __name__ == '__main__':
     is_repeat_pad = True if args.padding_type=='repeat' else False
     train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, 
         base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
-    
+
     train_loader = DataLoader(train_set, batch_size=args.batch_size,num_workers=8, shuffle=True,drop_last = True)
     
     del train_set,d_label_trn
@@ -415,6 +416,7 @@ if __name__ == '__main__':
     args.is_train = False
     dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
 		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
+
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev
 
