@@ -9,6 +9,10 @@ model:
     enc_dim: 256
     resnet_type: '18'
     nclasses: 2
+  xlsr: 
+    num_layers: 24
+    order: 'first'
+    custom_order: null
 data:
   name: 'asvspoof_2019_augall_5'
   kwargs:

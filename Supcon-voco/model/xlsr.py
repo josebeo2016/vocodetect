@@ -8,7 +8,7 @@ import os
 
 BASE_DIR=os.path.dirname(os.path.abspath(__file__))
 class SSLModel(nn.Module):
-    def __init__(self,device):
+    def __init__(self,device='cpu', num_layers=24, order='first', custom_order=None):
         super(SSLModel, self).__init__()
         
         cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')

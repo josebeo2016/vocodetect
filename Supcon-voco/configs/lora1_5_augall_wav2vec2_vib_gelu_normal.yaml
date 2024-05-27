@@ -6,6 +6,10 @@ model:
   loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
   recon_weight_l: 0.000001
   recon_weight_b: 0.05
+  xlsr: 
+    num_layers: 24
+    order: 'first'
+    custom_order: null
 lora:
   r: 8
   target_modules: ["LL", "VIB.encoder.0", "VIB.encoder.3", "VIB.decoder.0", "VIB.decoder.3","backend.m_frame_level.0", "backend.m_frame_level.3", "backend.m_frame_level.6"]

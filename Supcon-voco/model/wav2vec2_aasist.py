@@ -444,8 +444,8 @@ class Model(nn.Module):
             nn.SELU(inplace=True),
             nn.BatchNorm2d(128),
             nn.Conv2d(128, 64, kernel_size=(1,1)),
-            
         )
+        
         # position encoding
         self.pos_S = nn.Parameter(torch.randn(1, 42, filts[-1][-1]))
         

@@ -71,21 +71,19 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
     num_correct = 0.0
     num_total = 0.0
     train_loss_detail = {}
-    for info, batch_x, batch_y in tqdm(train_loader):
+    for info, batch_x, batch_y in tqdm(train_loader, ncols=90):
         train_loss = 0.0
         # print("training on anchor: ", info)
         # check number of dimension of batch_x
         # print('batch_y', batch_y)
         batch_x = batch_x.to(device)
         if len(batch_x.shape) == 3:
-            num_total +=batch_x.shape[2]
             batch_x = batch_x.squeeze(0).transpose(0,1)
-        else:
-            num_total +=batch_x.shape[0]
         
         # print("batch_y.shape", batch_y.shape)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        # print('batch_y', batch_y)
+        # print('batch_y', batch_y.shape)
+        num_total +=batch_y.shape[0]
         batch_out, batch_feat, batch_emb = model(batch_x)
         # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
         losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config, info)
@@ -113,18 +111,15 @@ def evaluate_accuracy(dev_loader, model, device, config):
     num_correct = 0.0
     model.eval()
     with torch.no_grad():
-        for info, batch_x, batch_y in tqdm(dev_loader):
+        for info, batch_x, batch_y in tqdm(dev_loader, ncols=90):
             loss_value = 0.0
             # print("Validating on anchor: ", info)
-            # print("batch_x.shape", batch_x.shape)
+            
             batch_x = batch_x.to(device)
             if len(batch_x.shape) == 3:
-                num_total +=batch_x.shape[2]
                 batch_x = batch_x.squeeze(0).transpose(0,1)
-            else:
-                num_total +=batch_x.shape[0]
             batch_y = batch_y.view(-1).type(torch.int64).to(device)
-            
+            num_total +=batch_y.shape[0]
             batch_out, batch_feat, batch_emb = model(batch_x)
             # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
             losses = model.loss(batch_out, batch_feat, batch_emb, batch_y, config, info)
@@ -151,7 +146,7 @@ def produce_emb_file(dataset, model, device, save_path, batch_size=10):
     key_list = []
     score_list = []
     with torch.no_grad():
-        for batch_x, utt_id in tqdm(data_loader):
+        for batch_x, utt_id in tqdm(data_loader, ncols=90):
             fname_list = []
             score_list = []  
             pred_list = []
@@ -186,7 +181,7 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     model.eval()
 
     with torch.no_grad():
-        for batch_x, utt_id in tqdm(data_loader):
+        for batch_x, utt_id in tqdm(data_loader, ncols=90):
             batch_x = batch_x.to(device)
 
             batch_out, _, _ = model(batch_x)
@@ -425,7 +420,7 @@ if __name__ == '__main__':
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    early_stopping = EarlyStop(patience=10, delta=0.01, init_best=90.0, save_dir=model_save_path)
+    early_stopping = EarlyStop(patience=10, delta=0.01, init_best=99.0, save_dir=model_save_path)
     start_train_time = time.time()
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))

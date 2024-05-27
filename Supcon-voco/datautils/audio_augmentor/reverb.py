@@ -38,7 +38,7 @@ class ReverbAugmentor(BaseAugmentor):
         # Compute convolution
         reverberate = np.convolve(self.data, rir_data)
         # Normalize output signal to avoid clipping
-        reverberate /= (np.max(np.abs(reverberate)))
+        # reverberate /= (np.max(np.abs(reverberate)))
         
         # transform to pydub audio segment
         self.augmented_audio = librosa_to_pydub(reverberate, sr=self.sr)

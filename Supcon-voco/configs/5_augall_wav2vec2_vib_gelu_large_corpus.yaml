@@ -1,13 +1,13 @@
 # 1 anchor, 5 aug anchor, 1 other real, 3 vocoded, 3 aug vocoded - with RawBoost only, 1 other spoof
 model:
-  name: wav2vec2_vib_gelu
+  name: wav2vec2_vib_gelu_multi
   flag_fix_ssl: false
   contra_mode: 'all' # 'one' or 'all'
   loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
   recon_weight_l: 0.000001
   recon_weight_b: 0.05
   xlsr: 
-    num_layers: 5
+    num_layers: 24
     order: 'first'
     custom_order: null
 data:

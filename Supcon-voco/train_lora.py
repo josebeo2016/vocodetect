@@ -11,6 +11,7 @@ from tqdm import tqdm
 import importlib
 import time
 from core_scripts.startup_config import set_random_seed
+import re
 
 # from model.loss_metrics import loss_custom
 from tensorboardX import SummaryWriter
@@ -312,7 +313,7 @@ def main():
     args = parser.parse_args()
     
     # set random seed
-    torch.set_random_seed(args.seed)
+    set_random_seed(args.seed)
         
     # #define model saving path
     model_tag = 'model_{}_{}_{}_{}_lora'.format(
@@ -365,10 +366,22 @@ def main():
             model = nn.DataParallel(model)
         print('Model initialized')
         
-     # LoRA
+    # LoRA
+    # check the config exist:
+    target_module_list = []
+    if 'target_modules_regex' in config['lora']:
+        target_modules_regex = config['lora']['target_modules_regex']
+        module_names = [name for name, _ in model.named_modules()]
+        
+        for i in target_modules_regex:
+            target_modules_regexi = re.compile(i)
+            matched_modules = [module for module in module_names if target_modules_regexi.match(module)]
+            target_module_list += matched_modules
+            print('Matched modules for {}: {}'.format(i, matched_modules))
+    # return
     lora_config = peft.LoraConfig(
         r=config['lora']['r'],
-        target_modules=config['lora']['target_modules'],
+        target_modules=config['lora']['target_modules']+target_module_list,
         modules_to_save=config['lora']['modules_to_save'],
     )
     peft_model = peft.get_peft_model(model, lora_config)
