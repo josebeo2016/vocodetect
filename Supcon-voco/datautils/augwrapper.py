@@ -191,6 +191,27 @@ def pitch_wrapper(x, args, sr=16000, audio_path = None):
             waveform = pitch(args, utt_id)
             waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
             return waveform
+
+def volume_wrapper(x, args, sr=16000, audio_path = None):
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path)
+    aug_audio_path = os.path.join(aug_dir, 'volume', utt_id)
+    args.output_path = os.path.join(aug_dir, 'volume')
+    args.out_format = 'wav'
+    args.input_path = os.path.dirname(audio_path)
+    
+    if (args.online_aug):
+        waveform = volume(args, utt_id, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            waveform = volume(args, utt_id)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
     
 def reverb_wrapper(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir

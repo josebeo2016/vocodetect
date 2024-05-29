@@ -61,10 +61,10 @@ class RawNet3(nn.Module):
             nn.Softmax(dim=2),
         )
 
-        self.bn5 = nn.BatchNorm1d(3072)
+        # self.bn5 = nn.BatchNorm1d(3072)
 
-        self.fc6 = nn.Linear(3072, nOut)
-        self.bn6 = nn.BatchNorm1d(nOut)
+        # self.fc6 = nn.Linear(3072, nOut)
+        # self.bn6 = nn.BatchNorm1d(nOut)
 
         self.mp3 = nn.MaxPool1d(3)
 

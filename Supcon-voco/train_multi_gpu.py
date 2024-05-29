@@ -396,7 +396,7 @@ if __name__ == '__main__':
     print('no. of training trials',len(file_train))
     is_repeat_pad = True if args.padding_type=='repeat' else False
     train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, 
-        base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
+        base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=True, **config['data']['kwargs'])
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size,num_workers=8, shuffle=True,drop_last = True)
     
@@ -410,7 +410,7 @@ if __name__ == '__main__':
     print('no. of validation trials',len(file_dev))
     args.is_train = False
     dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
-		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, **config['data']['kwargs'])
+		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=False, **config['data']['kwargs'])
 
     dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
     del dev_set,d_label_dev

@@ -12,11 +12,12 @@ from torch.nn.modules.transformer import _get_clones
 
 try:
     from model.loss_metrics import supcon_loss
-    from model.RawNet3 import RawNet3
+    from model.RawNet3.model import RawNet3
     from model.RawNet3.RawNetBasicBlock import Bottle2neck
     from model.conformer import ConformerBlock
 except:
     from .loss_metrics import supcon_loss
+    from .RawNet3.model import RawNet3
     from .RawNet3.RawNetBasicBlock import Bottle2neck
     from .conformer import ConformerBlock
 ___author__ = "Hemlata Tak"
@@ -45,9 +46,9 @@ class MyConformer(nn.Module):
         for layer in self.encoder_blocks:
             x = layer(x) #[bs,1+tiempo,emb_size]
         if self.pooling=='mean':
-            x = x.mean(dim=1)
+            embedding = x.mean(dim=1)
         elif self.pooling=='max':
-            x = x.max(dim=1)[0]
+            embedding = x.max(dim=1)[0]
         else:
             # first token
             embedding=x[:,0,:] #[bs, emb_size]
@@ -93,7 +94,8 @@ class Model(nn.Module):
     def _forward(self, x):
         #-----------------RawNet3-----------------#
         x, w = self.front_end(x) #(bs,frame_number,frontend_out_dim)
-        x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+        x = self.LL(x) #(bs,frame_number,feat_out_dim)
+        
         feats = x
         x = x.unsqueeze(dim=1) # add channel #(bs, 1, frame_number, 256)
         x = self.first_bn(x)
@@ -109,32 +111,44 @@ class Model(nn.Module):
         return output
     
     def forward(self, x_big):
-        
+        # make labels to be a tensor of [bz]
+        # labels = labels.squeeze(0)
+        if (x_big.dim() == 3):
+            x_big = x_big.transpose(0,1)
+            batch, length, sample_per_batch = x_big.shape
+            # x_big is a tensor of [length, batch, sample per batch]
+            # transform to [length, batch*sample per batch] by concat last dim
+            x_big = x_big.transpose(1,2)
+            x_big = x_big.reshape(batch * sample_per_batch, length)
         if (self.is_train):
             # x_big is a tensor of [1, length, bz]
             # convert to [bz, length]
-            x_big = x_big.squeeze(0).transpose(0,1)
+            # x_big = x_big.squeeze(0).transpose(0,1)
             output, feats, emb = self._forward(x_big)
+            # calculate the loss
             return output, feats, emb
         else:
             # in inference mode, we don't need the emb
             # the x_big now is a tensor of [bz, length]
+            print("Inference mode")
+            
             return self._forward(x_big)
         
     
-    def loss(self, output, feats, emb, labels, config):
-        L_CE = self.loss_CE(output, labels)
+    def loss(self, output, feats, emb, labels, config, info=None):
+        real_bzs = output.shape[0]
+        L_CE = 1/real_bzs *self.loss_CE(output, labels)
         
         # reshape the feats to match the supcon loss format
         feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        L_CF1 = supcon_loss(feats, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF1 = 1/real_bzs *supcon_loss(feats, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = supcon_loss(emb, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
+        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=self.contra_mode, sim_metric=self.sim_metric_seq)
         if self.loss_type == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}
         elif self.loss_type == 2:

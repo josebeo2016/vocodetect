@@ -10,11 +10,14 @@ import fairseq
 import os
 try:
     from model.loss_metrics import supcon_loss
-    from model.RawNet3 import RawNet3
+    from model.RawNet3.model import RawNet3
     from model.RawNet3.RawNetBasicBlock import Bottle2neck
+
 except:
     from .loss_metrics import supcon_loss
+    from .RawNet3.model import RawNet3
     from .RawNet3.RawNetBasicBlock import Bottle2neck
+
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
@@ -422,15 +425,28 @@ class Model(nn.Module):
         ####
         # create network wav2vec 2.0
         ####
-        self.ssl_model = SSLModel(self.device)
-        self.LL = nn.Linear(self.ssl_model.out_dim, 128)
-
+        self.front_end = RawNet3(
+            Bottle2neck,
+            model_scale=8,
+            context=True,
+            summed=True,
+            encoder_type="ECA",
+            nOut=256,
+            out_bn=False,
+            sinc_stride=10,
+            log_sinc=True,
+            norm_sinc="mean",
+            grad_mult=1,
+        ).to(device)
+        
+        
+        self.LL = nn.Linear(self.front_end.out_dim, filts[0])
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.first_bn1 = nn.BatchNorm2d(num_features=64)
         self.drop = nn.Dropout(0.5, inplace=True)
         self.drop_way = nn.Dropout(0.2, inplace=True)
         self.selu = nn.SELU(inplace=True)
-
+        
         # RawNet2 encoder
         self.encoder = nn.Sequential(
             nn.Sequential(Residual_block(nb_filts=filts[1], first=True)),
@@ -481,16 +497,35 @@ class Model(nn.Module):
         
         self.out_layer = nn.Linear(5 * gat_dims[1], args['aasist']['nclasses'])
 
-    def forward(self, x):
-       #-------pre-trained Wav2vec model fine tunning ------------------------##
-        if self.flag_fix_ssl:
-            with torch.no_grad():
-                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+    def forward(self, x_big):
+        # make labels to be a tensor of [bz]
+        # labels = labels.squeeze(0)
+        if (x_big.dim() == 3):
+            x_big = x_big.transpose(0,1)
+            batch, length, sample_per_batch = x_big.shape
+            # x_big is a tensor of [length, batch, sample per batch]
+            # transform to [length, batch*sample per batch] by concat last dim
+            x_big = x_big.transpose(1,2)
+            x_big = x_big.reshape(batch * sample_per_batch, length)
+        if (self.is_train):
+            # x_big is a tensor of [1, length, bz]
+            # convert to [bz, length]
+            # x_big = x_big.squeeze(0).transpose(0,1)
+            output, feats, emb = self._forward(x_big)
+            # calculate the loss
+            return output, feats, emb
         else:
-            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
-        x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+            # in inference mode, we don't need the emb
+            # the x_big now is a tensor of [bz, length]
+            print("Inference mode")
+            
+            return self._forward(x_big)
+    
+    def _forward(self, x):
+        #-----------------RawNet3-----------------#
+        x, _ = self.front_end(x) #(bs,frame_number,frontend_out_dim)
+        x = self.LL(x) #(bs,frame_number,feat_out_dim)
         feats = x
-        
         # post-processing on front-end features
         x = x.transpose(1, 2)   #(bs,feat_out_dim,frame_number)
         x = x.unsqueeze(dim=1) # add channel 
@@ -504,7 +539,6 @@ class Model(nn.Module):
         x = self.selu(x)
         
         w = self.attention(x)
-        
         #------------SA for spectral feature-------------#
         w1 = F.softmax(w,dim=-1)
         m = torch.sum(x * w1, dim=-1)
@@ -582,7 +616,6 @@ class Model(nn.Module):
     def loss(self, output, feats, emb, labels, config, info=None):
         
         real_bzs = output.shape[0]
-        n_views = 1.0
         loss_CE = torch.nn.CrossEntropyLoss()
         
         sim_metric_seq = lambda mat1, mat2: torch.bmm(

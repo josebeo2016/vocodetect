@@ -1,1 +1,1 @@
-from .RawNet3 import RawNet3
+from model.RawNet3.model import RawNet3 as RawNet3
