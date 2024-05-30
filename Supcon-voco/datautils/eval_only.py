@@ -35,18 +35,53 @@ def genList(dir_meta, is_train=False, is_eval=True, is_dev=False):
         return [], file_list
 
 
-def pad(x, padding_type, max_len=64600):
-    x_len = x.shape[0]
-    if x_len >= max_len:
-        return x[:max_len]
-    # need to pad
-    if padding_type == "repeat":
-        num_repeats = int(max_len / x_len)+1
-        padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
-    elif padding_type == "zero":
-        padded_x = np.zeros(max_len)
-        padded_x[:x_len] = x
-    return padded_x
+def pad(x:np.ndarray, padding_type:str='zero', max_len=64000, random_start=False) -> np.ndarray:
+        '''
+        pad audio signal to max_len
+        x: audio signal
+        padding_type: 'zero' or 'repeat' when len(X) < max_len, default 'zero'
+            zero: pad with zeros
+            repeat: repeat the signal until it reaches max_len
+        max_len: max length of the audio, default 64000
+        random_start: if True, randomly choose the start point of the audio
+        '''
+        x_len = x.shape[0]
+        padded_x = None
+        if max_len == 0:
+            # no padding
+            padded_x = x
+        elif max_len > 0:
+            if x_len >= max_len:
+                if random_start:
+                    start = np.random.randint(0, x_len - max_len+1)
+                    padded_x = x[start:start + max_len]
+                    # logger.debug("padded_x1: {}".format(padded_x.shape))
+                else:
+                    padded_x = x[:max_len]
+                    # logger.debug("padded_x2: {}".format(padded_x.shape))
+            else:
+                if random_start:
+                    start = np.random.randint(0, max_len - x_len+1)
+                    if padding_type == "repeat":
+                        num_repeats = int(max_len / x_len) + 1
+                        padded_x = np.tile(x, (1, num_repeats))[:, start:start + max_len][0]
+
+                    elif padding_type == "zero":
+                        padded_x = np.zeros(max_len)
+                        padded_x[start:start + x_len] = x
+                else:
+                    if padding_type == "repeat":
+                        num_repeats = int(max_len / x_len) + 1
+                        padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
+
+                    elif padding_type == "zero":
+                        padded_x = np.zeros(max_len)
+                        padded_x[:x_len] = x
+
+        else:
+            raise ValueError("max_len must be >= 0")
+        # logger.debug("padded_x: {}".format(padded_x.shape))
+        return padded_x
 			
 class Dataset_for(Dataset):
     def __init__(self,args,list_IDs, labels, base_dir, algo):
@@ -72,10 +107,10 @@ class Dataset_for(Dataset):
             
             
 class Dataset_for_eval(Dataset):
-    def __init__(self, list_IDs, base_dir, padding_type="zero"):
+    def __init__(self, list_IDs, base_dir, max_len=64600, padding_type="zero"):
         self.list_IDs = list_IDs
         self.base_dir = os.path.join(base_dir)
-        self.cut=64600 # take ~4 sec audio (64600 samples)
+        self.cut=max_len # take ~4 sec audio (64600 samples)
         self.padding_type = padding_type
     def __len__(self):
         return len(self.list_IDs)

@@ -133,11 +133,7 @@ class Dataset_for(Dataset):
             with open(os.path.join(base_dir, 'scp/spoof_dev.lst'), 'r') as f:
                 self.spoof_list = f.readlines()
             self.spoof_list = [i.strip() for i in self.spoof_list]
-        
-        # for testing, randomly get 5% of sample of spoof list and list_IDs
-        self.list_IDs = np.random.choice(self.list_IDs, int(len(self.list_IDs)), replace=False)
-        self.spoof_list = np.random.choice(self.spoof_list, int(len(self.spoof_list)), replace=False)
-        
+                
         
         self.repeat_pad = repeat_pad
         self.trim_length = trim_length
@@ -218,11 +214,12 @@ class Dataset_for(Dataset):
         return self.list_IDs[idx], batch_data, Tensor(label)
 
 class Dataset_for_eval(Dataset):
-    def __init__(self, list_IDs, base_dir, padding_type="zero"):
+    def __init__(self, list_IDs, base_dir, max_len=64600, padding_type="zero"):
         self.list_IDs = list_IDs
-        self.base_dir = base_dir
-        self.cut=64600 # take ~4 sec audio (64600 samples)
+        self.base_dir = os.path.join(base_dir)
+        self.cut=max_len # take ~4 sec audio (64600 samples)
         self.padding_type = padding_type
+    
     def __len__(self):
         return len(self.list_IDs)
     
