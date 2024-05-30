@@ -380,7 +380,7 @@ if __name__ == '__main__':
     if args.eval:
         _,file_eval = genList(dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=True)
         print('no. of eval trials',len(file_eval))
-        eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'), padding_type=args.padding_type)
+        eval_set=Dataset_for_eval(list_IDs = file_eval, base_dir = os.path.join(args.database_path+'/'), max_len=config['data']['kwargs']['trim_length'], padding_type=args.padding_type)
         if (args.predict):
             produce_prediction_file(eval_set, model, device, args.eval_output, batch_size=args.batch_size)
         elif (args.emb):
