@@ -1,0 +1,25 @@
+# 1 anchor, 5 aug anchor, 1 other real, 3 vocoded, 3 aug vocoded - with RawBoost only, 1 other spoof
+model:
+  name: wav2vec2_960_vib_gelu_multi
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
+  recon_weight_l: 0.000001
+  recon_weight_b: 0.05
+  xlsr: 
+    num_layers: 24
+    order: 'first'
+    custom_order: null
+data:
+  name: 'asvspoof5_augall_5'
+  kwargs:
+    vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
+    augmentation_methods: ["RawBoost12", "background_noise_5_15", "reverb_1", "telephone_g722", "gaussian_1"]
+    num_additional_real: 1
+    num_additional_spoof: 2
+    trim_length: 64000
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/datab/phucdt/Asvspoof_aug/asvspoof5'
+    noise_path: '/datab/Dataset/Noise/musan'
+    rir_path: '/datab/Dataset/Noise/RIRS_NOISES'

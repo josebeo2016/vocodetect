@@ -5,7 +5,8 @@ from .speed import SpeedAugmentor
 from .volume import VolumeAugmentor
 from .telephone import TelephoneEncodingAugmentor
 from .gaussian import GaussianAugmentor
-
+from .copy_paste import CopyPasteAugmentor
+from .base import BaseAugmentor
 # from . import utils
 
 from .__version__ import (
@@ -19,7 +20,7 @@ from .__version__ import (
     __version__,
 )
 
-SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise']
+SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise', 'copy_paste']
 
 import logging.config
 LOGGING = {

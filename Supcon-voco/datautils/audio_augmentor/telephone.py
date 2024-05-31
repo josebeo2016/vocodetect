@@ -50,7 +50,8 @@ class TelephoneEncodingAugmentor(BaseAugmentor):
         if self.bandpass:
             self.effects = ",".join(
                 [
-                    "lowpass=frequency=4000:poles=1",
+                    "lowpass=frequency={}:poles=1".format(self.bandpass.get("lowpass", 3400)),
+                    "highpass=frequency={}:poles=1".format(self.bandpass.get("highpass", 300)),
                     "compand=attacks=0.02:decays=0.05:points=-60/-60|-30/-10|-20/-8|-5/-8|-2/-8:gain=-8:volume=-7:delay=0.05",
                 ]
             )
