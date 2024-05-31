@@ -359,8 +359,8 @@ if __name__ == '__main__':
 
     #set Adam optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.max_lr,weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
     
     # load state dict
     if args.model_path:
