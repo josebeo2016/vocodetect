@@ -71,7 +71,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
     num_correct = 0.0
     num_total = 0.0
     train_loss_detail = {}
-    for info, batch_x, batch_y in tqdm(train_loader, ncols=90):
+    for info, batch_x, batch_y in tqdm(train_loader, ncols=100):
         train_loss = 0.0
         # print("training on anchor: ", info)
         # check number of dimension of batch_x
@@ -82,7 +82,7 @@ def train_epoch(train_loader, model, lr, optimizer, device, config):
         
         # print("batch_y.shape", batch_y.shape)
         batch_y = batch_y.view(-1).type(torch.int64).to(device)
-        # print('batch_y', batch_y.shape)
+        # print('batch_y', batch_y)
         num_total +=batch_y.shape[0]
         batch_out, batch_feat, batch_emb = model(batch_x)
         # losses = loss_custom(batch_out, batch_feat, batch_emb, batch_y, config)
@@ -111,7 +111,7 @@ def evaluate_accuracy(dev_loader, model, device, config):
     num_correct = 0.0
     model.eval()
     with torch.no_grad():
-        for info, batch_x, batch_y in tqdm(dev_loader, ncols=90):
+        for info, batch_x, batch_y in tqdm(dev_loader, ncols=100):
             loss_value = 0.0
             # print("Validating on anchor: ", info)
             
@@ -146,7 +146,7 @@ def produce_emb_file(dataset, model, device, save_path, batch_size=10):
     key_list = []
     score_list = []
     with torch.no_grad():
-        for batch_x, utt_id in tqdm(data_loader, ncols=90):
+        for batch_x, utt_id in tqdm(data_loader, ncols=100):
             fname_list = []
             score_list = []  
             pred_list = []
@@ -181,7 +181,7 @@ def produce_evaluation_file(dataset, model, device, save_path, batch_size=10):
     model.eval()
 
     with torch.no_grad():
-        for batch_x, utt_id in tqdm(data_loader, ncols=90):
+        for batch_x, utt_id in tqdm(data_loader, ncols=100):
             batch_x = batch_x.to(device)
 
             batch_out, _, _ = model(batch_x)
@@ -244,8 +244,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_epochs', type=int, default=100)
     parser.add_argument('--start_epoch', type=int, default=0)
-    parser.add_argument('--min_lr', type=float, default=0.00000001)
-    parser.add_argument('--max_lr', type=float, default=0.00001)
+    parser.add_argument('--min_lr', type=float, default=0.0000001)
+    parser.add_argument('--max_lr', type=float, default=0.0001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--loss', type=str, default='weighted_CCE')
     parser.add_argument('--config', type=str, default='configs/config.yaml')
@@ -270,6 +270,8 @@ if __name__ == '__main__':
                         help='get the predicted label instead of score')
     parser.add_argument('--emb', action='store_true', default=False,
                         help='produce embeddings')
+    parser.add_argument('--dev_diff', type=bool, default=False,
+                        help='If True, use the different dev loader. Default is same to train loader')
 
     ##===================================================Rawboost data augmentation ======================================================================#
 
@@ -349,6 +351,10 @@ if __name__ == '__main__':
     Dataset_for = importlib.import_module('datautils.'+config['data']['name']).Dataset_for
     Dataset_for_eval = importlib.import_module('datautils.'+config['data']['name']).Dataset_for_eval
     
+    if args.dev_diff:
+        print("Dev_DIFF mode enabled! Developing is load from normal dataloader")
+        Dataset_for_dev = importlib.import_module('datautils.normal').Dataset_for_dev
+    
     # dynamic load model based on name in config file
     modelClass = importlib.import_module('model.'+config['model']['name']).Model
     model = modelClass(config['model'], device)
@@ -359,8 +365,9 @@ if __name__ == '__main__':
 
     #set Adam optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.max_lr,weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
-    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr, cycle_momentum=False)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.min_lr, max_lr=args.max_lr,step_size_up=3,mode="exp_range",gamma=0.85, cycle_momentum=False)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=2, T_mult=1, eta_min=args.min_lr)
     
     # load state dict
     if args.model_path:
@@ -391,8 +398,15 @@ if __name__ == '__main__':
    
      
     # define train dataloader
-    d_label_trn,file_train = genList( dir_meta =  os.path.join(args.database_path,'protocol.txt'),is_train=True,is_eval=False,is_dev=False)
-    
+    # d_label_trn,file_train = genList(dir_meta = args.database_path),is_train=True,is_eval=False,is_dev=False)
+    d_label_trn,file_train = genList( dir_meta = os.path.join(args.database_path,'protocol.txt'),is_train=True,is_eval=False,is_dev=False)
+    # check config['data']['portion'] is defined or not
+    if 'portion' in config['data']:
+        idx = range(len(file_train))
+        idx = np.random.choice(idx, int(len(file_train)*config['data']['portion']), replace=False)
+        file_train = [file_train[i] for i in idx]
+        if len(d_label_trn)>0: # the case of train without label
+            d_label_trn = {k: d_label_trn[k] for k in file_train}
     print('no. of training trials',len(file_train))
     is_repeat_pad = True if args.padding_type=='repeat' else False
     train_set=Dataset_for(args, list_IDs = file_train, labels = d_label_trn, 
@@ -403,24 +417,49 @@ if __name__ == '__main__':
     del train_set,d_label_trn
     
 
-    # define validation dataloader
+    # # define validation dataloader
 
-    d_label_dev,file_dev = genList(dir_meta = os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=False, is_dev=True)
+    # d_label_dev,file_dev = genList(dir_meta = os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=False, is_dev=True)
     
+    # print('no. of validation trials',len(file_dev))
+    # args.is_train = False
+    # dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
+	# 	base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=False, **config['data']['kwargs'])
+
+    # dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
+    # del dev_set,d_label_dev
+    # define validation dataloader
+    
+    if args.dev_diff:
+        # change the genList of Dev set to normal dataloader
+        genList = importlib.import_module('datautils.normal').genList
+    
+    d_label_dev,file_dev = genList(dir_meta =os.path.join(args.database_path,'protocol.txt'),is_train=False,is_eval=False, is_dev=True)  
+    if 'portion' in config['data']:
+        idx = range(len(file_dev))
+        idx = np.random.choice(idx, int(len(file_dev)*config['data']['portion']), replace=False)
+        file_dev = [file_dev[i] for i in idx]
+        if len(d_label_dev)>0: # the case of train without label
+            d_label_dev = {k: d_label_dev[k] for k in file_dev}      
     print('no. of validation trials',len(file_dev))
     args.is_train = False
-    dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
-		base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=False, **config['data']['kwargs'])
+    if args.dev_diff:
+        dev_set=Dataset_for_dev(args,list_IDs = file_dev, labels = d_label_dev,
+            base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=False, **config['data']['kwargs'])
+        dev_loader = DataLoader(dev_set, batch_size=args.batch_size*32,num_workers=8, shuffle=False)
+    else:
+        dev_set = Dataset_for(args,list_IDs = file_dev, labels = d_label_dev,
+            base_dir = args.database_path+'/',algo=args.algo, repeat_pad=is_repeat_pad, is_train=False, **config['data']['kwargs'])
+        dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
 
-    dev_loader = DataLoader(dev_set, batch_size=args.batch_size,num_workers=8, shuffle=False)
+    
     del dev_set,d_label_dev
-
 
     
     # Training and validation 
     num_epochs = args.num_epochs
     writer = SummaryWriter('logs/{}'.format(model_tag))
-    early_stopping = EarlyStop(patience=10, delta=0.01, init_best=99.0, save_dir=model_save_path)
+    early_stopping = EarlyStop(patience=20, delta=0.01, init_best=95.0, save_dir=model_save_path)
     start_train_time = time.time()
     for epoch in range(args.start_epoch,args.start_epoch + num_epochs, 1):
         print('Epoch {}/{}. Current LR: {}'.format(epoch, num_epochs - 1, optimizer.param_groups[0]['lr']))
@@ -435,7 +474,7 @@ if __name__ == '__main__':
             writer.add_scalar('train_{}'.format(loss_name), loss, epoch)
         for loss_name, loss in val_loss_detail.items():
             writer.add_scalar('val_{}'.format(loss_name), loss, epoch)
-        print('\n{} - {} - {} '.format(epoch,running_loss,val_loss))
+        print('\n{} - {} - {}\nTraining ACC:{} - Validation ACC: {}'.format(epoch,running_loss,val_loss, train_accuracy, val_accuracy))
         scheduler.step()
         # check early stopping
         early_stopping(val_accuracy, model, epoch)
