@@ -64,24 +64,22 @@ def pad(x:np.ndarray, padding_type:str='zero', max_len=64000, random_start=False
                     # logger.debug("padded_x2: {}".format(padded_x.shape))
             else:
                 if random_start:
-                    start = np.random.randint(0, max_len - x_len+1)
-                    if padding_type == "repeat":
-                        num_repeats = int(max_len / x_len) + 1
-                        padded_x = np.tile(x, (1, num_repeats))[:, start:start + max_len][0]
-
-                    elif padding_type == "zero":
-                        padded_x = np.zeros(max_len)
-                        padded_x[start:start + x_len] = x
+                    # keep at least half of the signal
+                    start = np.random.randint(0, int((x_len+1)/2))
+                    x_new = x[start:]
                 else:
-                    if padding_type == "repeat":
-                        num_repeats = int(max_len / x_len) + 1
-                        padded_x = np.tile(x, (1, num_repeats))[:, :max_len][0]
+                    x_new = x
+                
+                if padding_type == "repeat":
+                    num_repeats = int(max_len / len(x_new)) + 1
+                    padded_x = np.tile(x_new, (1, num_repeats))[:, :max_len][0]
 
-                    elif padding_type == "zero":
-                        padded_x = np.zeros(max_len)
-                        padded_x[:x_len] = x
+                elif padding_type == "zero":
+                    padded_x = np.zeros(max_len)
+                    padded_x[:len(x_new)] = x_new
 
         else:
             raise ValueError("max_len must be >= 0")
         # logger.debug("padded_x: {}".format(padded_x.shape))
         return padded_x
+

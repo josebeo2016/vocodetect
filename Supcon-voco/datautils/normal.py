@@ -15,28 +15,34 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     # bonafide: 1, spoof: 0
     d_meta = {}
     file_list=[]
-    with open(dir_meta, 'r') as f:
+    dir_meta = os.path.dirname(dir_meta)
+    protocol = os.path.join(dir_meta, "protocol.txt")
+    with open(protocol, 'r') as f:
         l_meta = f.readlines()
     if (is_train):
         for line in l_meta:
-            key, subset, _, label = line.strip().split()
-            if (subset == 'train'):
-                file_list.append(key)
-                d_meta[key] = 1 if label == 'bonafide' else 0
+            utt, subset, label = line.strip().split()
+            if subset == 'train':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0
+
         return d_meta, file_list
     if (is_dev):
         for line in l_meta:
-            key, subset, _, label = line.strip().split()
-            if (subset == 'dev'):
-                file_list.append(key)
-                d_meta[key] = 1 if label == 'bonafide' else 0
+            utt, subset, label = line.strip().split()
+            if subset == 'dev':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0
         return d_meta, file_list
     if (is_eval):
         for line in l_meta:
-            key, subset, _, label = line.strip().split()
-            if (subset == 'eval' or subset == 'hidden' or subset == 'progress' or subset == 'test'):
-                file_list.append(key)
-        return [], file_list
+            utt, subset, label = line.strip().split()
+            if subset == 'eval':
+                file_list.append(utt)
+                d_meta[utt] = 1 if label == 'bonafide' else 0
+        # return d_meta, file_list
+        return d_meta, file_list
+    
 def pad(x:np.ndarray, padding_type:str='zero', max_len=64000, random_start=False) -> np.ndarray:
     '''
     pad audio signal to max_len
@@ -75,9 +81,9 @@ def pad(x:np.ndarray, padding_type:str='zero', max_len=64000, random_start=False
 
 class Dataset_for(Dataset):
     def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
-                 augmentation_methods=[], num_additional_real=2, num_additional_spoof=1, trim_length=64000, 
-                 wav_samp_rate=16000, noise_path=None, rir_path=None, aug_dir=None, 
-                 online_aug=False, repeat_pad=True):
+                 augmentation_methods=[], num_additional_real=2, num_additional_spoof=2, 
+                 trim_length=64000, wav_samp_rate=16000, noise_path=None, rir_path=None, 
+                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True):
         """
         Args:
             list_IDs (string): Path to the .lst file with real audio filenames.
@@ -121,6 +127,32 @@ class Dataset_for(Dataset):
         x_inp= Tensor(X_pad)
         target = self.labels[utt_id]
         return idx, x_inp, target
+
+class Dataset_for_dev(Dataset):
+    def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
+                 augmentation_methods=[], num_additional_real=2, num_additional_spoof=2, 
+                 trim_length=64000, wav_samp_rate=16000, noise_path=None, rir_path=None, 
+                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True):
+        self.list_IDs = list_IDs
+        self.base_dir = os.path.join(base_dir)
+        self.cut=trim_length 
+        self.labels = labels
+        if repeat_pad:
+            self.padding_type = "repeat"
+        else:
+            self.padding_type = "zero"
+    
+    def __len__(self):
+        return len(self.list_IDs)
+    
+    def __getitem__(self, index):
+            
+        utt_id = self.list_IDs[index]
+        X, fs = librosa.load(self.base_dir + "/" + utt_id, sr=16000)
+        X_pad = pad(X,self.padding_type,self.cut)
+        x_inp = Tensor(X_pad)
+        target = self.labels[utt_id]
+        return index, x_inp, target
 
 class Dataset_for_eval(Dataset):
     def __init__(self, list_IDs, base_dir, padding_type='zero', trim_length=64000):

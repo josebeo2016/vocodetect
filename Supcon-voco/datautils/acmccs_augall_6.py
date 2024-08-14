@@ -127,12 +127,21 @@ class Dataset_for(Dataset):
             augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
         
         # Augmented real samples as positive data
+        # Calculate the number of augmentations to be applied to the anchor audio
+        num_augmentations = (len(self.vocoders)*2 + self.num_additional_spoof) - 1 - self.num_additional_real
         augmented_audios = []
-        for augment in self.augmentation_methods:
-            augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
-            # print("aug audio shape",augmented_audio.shape)
-            augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
-
+        if len(self.augmentation_methods) <= num_augmentations:
+            # use all the augmentation methods
+            num_augmentations = len(self.augmentation_methods)
+            for augment in self.augmentation_methods:
+                augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
+                augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
+        else:
+            # randomly select the augmentation methods
+            aug_methods = np.random.choice(self.augmentation_methods, num_augmentations, replace=False)
+            for augment in aug_methods:
+                augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
+                augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
 
         # Additional real audio samples as positive data
         idxs = list(range(len(self.list_IDs)))

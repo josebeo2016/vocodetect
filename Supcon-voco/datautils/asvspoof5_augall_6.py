@@ -127,12 +127,21 @@ class Dataset_for(Dataset):
             augmented_vocoded_audios.append(np.expand_dims(augmented_vocoded_audio, axis=1))
         
         # Augmented real samples as positive data
+        # Calculate the number of augmentations to be applied to the anchor audio
+        num_augmentations = (len(self.vocoders)*2 + self.num_additional_spoof*2) - 1 - self.num_additional_real
         augmented_audios = []
-        for augment in self.augmentation_methods:
-            augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
-            # print("aug audio shape",augmented_audio.shape)
-            augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
-
+        if len(self.augmentation_methods) <= num_augmentations:
+            # use all the augmentation methods
+            num_augmentations = len(self.augmentation_methods)
+            for augment in self.augmentation_methods:
+                augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
+                augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
+        else:
+            # randomly select the augmentation methods
+            aug_methods = np.random.choice(self.augmentation_methods, num_augmentations, replace=False)
+            for augment in aug_methods:
+                augmented_audio = globals()[augment](real_audio, self.args, self.sample_rate, audio_path = real_audio_file)
+                augmented_audios.append(np.expand_dims(augmented_audio, axis=1))
 
         # Additional real audio samples as positive data
         idxs = list(range(len(self.list_IDs)))
@@ -144,8 +153,14 @@ class Dataset_for(Dataset):
         additional_spoof_idxs = np.random.choice(self.spoof_list, self.num_additional_spoof, replace=False)
         additional_spoofs = [np.expand_dims(load_audio(os.path.join(self.base_dir,i)),axis=1) for i in additional_spoof_idxs]
         
+        # augment the additional spoof samples with the copy-paste augmentation method
+        augmented_additional_spoofs = []
+        for spoof in additional_spoofs:
+            augmented_spoof = globals()['copy_paste_r'](spoof, self.args, self.sample_rate, audio_path = real_audio_file)
+            augmented_additional_spoofs.append(np.expand_dims(augmented_spoof, axis=1))
+        
         # merge all the data
-        batch_data = [np.expand_dims(real_audio, axis=1)] + augmented_audios + additional_audios + vocoded_audios + augmented_vocoded_audios + additional_spoofs
+        batch_data = [np.expand_dims(real_audio, axis=1)] + augmented_audios + additional_audios + vocoded_audios + augmented_vocoded_audios + additional_spoofs + augmented_additional_spoofs
         batch_data = nii_wav_aug.batch_pad_for_multiview(
                 batch_data, self.sample_rate, self.trim_length, random_trim_nosil=True, repeat_pad=self.repeat_pad)
         batch_data = np.concatenate(batch_data, axis=1)
@@ -154,7 +169,7 @@ class Dataset_for(Dataset):
         # return will be anchor ID, batch data and label
         batch_data = Tensor(batch_data)
         # label is 1 for anchor and positive, 0 for vocoded
-        label = [1] * (len(augmented_audios) +len(additional_audios) + 1) + [0] * (len(self.vocoders*2) +  len(additional_spoofs))
+        label = [1] * (len(augmented_audios) +len(additional_audios) + 1) + [0] * (len(self.vocoders*2) +  len(additional_spoofs) + len(augmented_additional_spoofs))
         return self.list_IDs[idx], batch_data, Tensor(label)
 
 class Dataset_for_eval(Dataset):
