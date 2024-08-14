@@ -7,18 +7,18 @@ model:
   recon_weight_l: 0.000001
   recon_weight_b: 0.05
   xlsr: 
-    num_layers: 24
+    num_layers: null
     order: 'first'
     custom_order: null
 data:
-  portion: 1 # test with 0.01 dataset
-  name: 'asvspoof5_augall_5'
+  portion: 1 # test with 0.5 dataset
+  name: 'acmccs_augall_5'
   kwargs:
     vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
     augmentation_methods: ["RawBoost12", "background_noise_5_15", "reverb_1", "telephone_g722", "gaussian_1"]
     num_additional_real: 1
     num_additional_spoof: 1
-    trim_length: 64000
+    trim_length: 96000
     wav_samp_rate: 16000
     online_aug: true
     aug_dir: '/datab/Dataset/cnsl_real_fake_audio/3_asvspoof5/augment'
