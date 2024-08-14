@@ -11,7 +11,7 @@ class SSLModel(nn.Module):
     def __init__(self,device='cpu', num_layers=24, order='first', custom_order=None):
         super(SSLModel, self).__init__()
         
-        cp_path = os.path.join(BASE_DIR,'pretrained/xlsr2_300m.pt')
+        cp_path = os.path.join(BASE_DIR,'pretrained/wav2vec_big_960h.pt')
         model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
         self.model = model[0]
         self.device=device

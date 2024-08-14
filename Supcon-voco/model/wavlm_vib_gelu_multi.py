@@ -7,31 +7,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 import os
+from torch.nn.modules.transformer import _get_clones
+from .WavLM.fe import WavLMFe
 try:
     from model.loss_metrics import supcon_loss
-    # from model.xlsr import SSLModel
-    from model.wav2vec2_960 import SSLModel
+    from model.WavLM.fe import WavLMFe
 except:
-    from loss_metrics import supcon_loss
-    # from xlsr import SSLModel
-    from .wav2vec2_960 import SSLModel
+    from .loss_metrics import supcon_loss
+    from .WavLM.fe import WavLMFe
 
 
 ___author__ = "Hemlata Tak"
 __email__ = "tak@eurecom.fr"
-
-class DropoutForMC(nn.Module):
-    """Dropout layer for Bayesian model
-    THe difference is that we do dropout even in eval stage
-    """
-    def __init__(self, p, dropout_flag=True):
-        super(DropoutForMC, self).__init__()
-        self.p = p
-        self.flag = dropout_flag
-        return
-        
-    def forward(self, x):
-        return torch.nn.functional.dropout(x, self.p, training=self.flag)
 
 class BackEnd(nn.Module):
     """Back End Wrapper
@@ -150,37 +137,36 @@ class Model(nn.Module):
         self.flag_fix_ssl = args['flag_fix_ssl']
         self.contra_mode = args['contra_mode']
         self.loss_type = args['loss_type']
-        ####
-        # create network wav2vec 2.0
-        ####
-        # self.ssl_model = SSLModel(self.device)
-        self.ssl_model = SSLModel(self.device, num_layers=args['xlsr']['num_layers'], order=args['xlsr']['order'], custom_order=args['xlsr']['custom_order'])
         
-        self.LL = nn.Linear(self.ssl_model.out_dim, 128)
+        self.loss_CE = nn.CrossEntropyLoss(weight = torch.FloatTensor([float(1-args['ce_loss_weight']), float(args['ce_loss_weight'])]).to(device))
+        self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
+            mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
+        # front-end kwargs
+        fe_kwargs = args.get('wavlm_kwargs', {})
+        self.front_end = WavLMFe(**fe_kwargs)
+        self.front_end.is_train = is_train
+        
+        self.LL = nn.Linear(self.front_end.out_dim, 128)
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.first_bn1 = nn.BatchNorm2d(num_features=64)
         self.drop = nn.Dropout(0.5, inplace=True)
         self.selu = nn.SELU(inplace=True)
         
-        self.loss_CE = nn.CrossEntropyLoss()
         self.VIB = VIB(128, 128, 64)
         self.backend = BackEnd(64, 64, 2, 0.5, False)
         
-        self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
-            mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
         # Post-processing
         
     def _forward(self, x):
         #-------pre-trained Wav2vec model fine tunning ------------------------##
         if self.flag_fix_ssl:
-            self.ssl_model.is_train = False
             with torch.no_grad():
-                x_ssl_feat = self.ssl_model(x.squeeze(-1))
+                x_ssl_feat = self.front_end(x.squeeze(-1))
         else:
-            self.ssl_model.is_train = True
-            x_ssl_feat = self.ssl_model(x.squeeze(-1)) #(bs,frame_number,feat_dim)
+            x_ssl_feat = self.front_end(x.squeeze(-1)) #(bs,frame_number,feat_dim)
         x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
         feats = x
+        # print('feats.shape',feats.shape)
         x = nn.GELU()(x)
         
         # VIB
@@ -258,13 +244,12 @@ class Model(nn.Module):
         # reshape the feats_w2v to match the supcon loss format
         feats_w2v = feats_w2v.unsqueeze(1)
         # print("feats_w2v.shape", feats_w2v.shape)
-        L_CF1 = 1/real_bzs * supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
-        
+        L_CF1 = supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        L_CF2 = supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         if config['model']['loss_type'] == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2, 'Recon_loss':Recon_loss}
