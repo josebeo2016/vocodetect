@@ -25,6 +25,7 @@ class CopyPasteAugmentor(BaseAugmentor):
         self.shuffle_ratio = config['shuffle_ratio']
         self.frame_size = config['frame_size']
         assert self.shuffle_ratio > 0.0 and self.shuffle_ratio < 1.0
+        assert self.frame_size >= 0
         # Determine frame size
         if self.frame_size == 0:
             self.frame_size = np.random.randint(800, 3201)  # Randomly select frame size from [800:3200]
@@ -37,6 +38,8 @@ class CopyPasteAugmentor(BaseAugmentor):
         # Check if the frame_size is greater than the audio length
         if self.frame_size > len(self.data):
             logger.warning(f"Frame size {self.frame_size} is greater than audio length {len(self.data)}. Skipping augmentation.")
+            # no transformation, just return the original audio
+            self.augmented_audio = librosa_to_pydub(self.data, sr=self.sr)
             return
         
         # Split audio into frames

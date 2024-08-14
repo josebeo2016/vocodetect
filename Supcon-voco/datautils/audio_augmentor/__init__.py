@@ -7,6 +7,16 @@ from .telephone import TelephoneEncodingAugmentor
 from .gaussian import GaussianAugmentor
 from .copy_paste import CopyPasteAugmentor
 from .base import BaseAugmentor
+from .time_masking import TimeMaskingAugmentor
+from .freq_masking import FrequencyMaskingAugmentor
+from .masking import MaskingAugmentor
+from .time_swap import TimeSwapAugmentor
+from .freq_swap import FrequencySwapAugmentor
+from .swapping import SwappingAugmentor
+from .linear_filter import LinearFilterAugmentor
+from .bandpass import BandpassAugmentor
+
+
 # from . import utils
 
 from .__version__ import (
@@ -20,7 +30,7 @@ from .__version__ import (
     __version__,
 )
 
-SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise', 'copy_paste']
+SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise', 'time_masking', 'freq_masking', 'masking', 'time_swap', 'freq_swap', 'swapping', 'linear_filter', 'bandpass']
 
 import logging.config
 LOGGING = {

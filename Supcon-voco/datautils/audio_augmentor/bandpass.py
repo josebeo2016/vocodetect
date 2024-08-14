@@ -19,7 +19,7 @@ def apply_codec(waveform, sample_rate, format, encoder=None):
 def apply_effect(waveform, sample_rate, effect):
     effector = AudioEffector(effect=effect)
     return effector.apply(waveform, sample_rate)
-class TelephoneEncodingAugmentor(BaseAugmentor):
+class BandpassAugmentor(BaseAugmentor):
     """
     About
     -----
@@ -38,36 +38,30 @@ class TelephoneEncodingAugmentor(BaseAugmentor):
         "out_format": "wav",
         "encoding": "ALAW",
         "bandpass": {
-            "lowpass": "3400",
-            "highpass": "400"
+            "lowpass": "4000",
+            "highpass": "0"
         }
     }
     """
     def __init__(self, config: dict):
         super().__init__(config)
-        self.encoding = config.get("encoding", "g722")
-        self.bandpass = config.get("bandpass", None)
-        if self.bandpass:
-            self.effects = ",".join(
-                [
-                    "lowpass=frequency={}:poles=1".format(self.bandpass.get("lowpass", 3400)),
-                    "highpass=frequency={}:poles=1".format(self.bandpass.get("highpass", 300)),
-                    "compand=attacks=0.02:decays=0.05:points=-60/-60|-30/-10|-20/-8|-5/-8|-2/-8:gain=-8:volume=-7:delay=0.05",
-                ]
-            )
+        self.bandpass = {
+            "lowpass": config.get("lowpass", 4000),
+            "highpass": config.get("highpass", 0)
+        }
+
+        self.effects = ",".join(
+            [
+                "lowpass=frequency={}:poles=1".format(self.bandpass['lowpass']),
+                "highpass=frequency={}:poles=1".format(self.bandpass['highpass']),
+            ]
+        )
         
     def transform(self):
         """
         """
         torch_audio = torch.tensor(self.data).reshape(1, -1)
-        
-        if self.effects:
-            # aug_audio, _ = sox_fx(torch.tensor(self.data).reshape(1, -1), self.sr, self.effects)
-            aug_audio = apply_effect(torch_audio.T, self.sr, self.effects)
-        else:
-            aug_audio = torch_audio
-        codec_applied = apply_codec(aug_audio, self.sr, self.encoding).T
+        aug_audio = apply_effect(torch_audio.T, self.sr, self.effects)
         # convert to numpy array
-        aug_audio = codec_applied.numpy().flatten()
-        
+        aug_audio = aug_audio.numpy().flatten()
         self.augmented_audio = librosa_to_pydub(aug_audio)
