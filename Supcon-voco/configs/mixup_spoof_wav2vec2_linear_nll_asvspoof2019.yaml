@@ -1,0 +1,27 @@
+model:
+  name: wav2vec2_mixup_spoof_linear
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 4: only loss CE (no contrastive loss)
+  
+  mixup:
+    mix_alpha: 0.5
+    random_mix: true
+    tau: 0.07
+    is_norm: true
+    n_synthetic: 2
+data:
+  # name: 'asvspoof_2019_mixup_1'
+  name: 'eval_only'
+  kwargs:
+    augmentation_methods: ["RawBoost12", "background_noise_wrapper", "pitch_wrapper", "reverb_wrapper"]
+    num_additional_real: 3
+    num_aug_real: 4
+    num_additional_spoof: 3
+    num_aug_spoof: 1
+    trim_length: 64000
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/datab/phucdt/Asvspoof_aug/asvspoof2019'
+    noise_path: '/dataa/phucdt/vocodetect/Supcon-voco/datautils/audio_augmentor/musan'
+    rir_path: '/dataa/phucdt/vocodetect/Supcon-voco/datautils/audio_augmentor/RIRS_NOISES'

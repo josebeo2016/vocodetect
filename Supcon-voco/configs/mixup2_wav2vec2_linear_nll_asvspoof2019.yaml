@@ -10,6 +10,7 @@ model:
     nclasses: 2
 data:
   name: 'asvspoof_2019_mixup_1'
+  # name: 'eval_only'
   kwargs:
     augmentation_methods: ["RawBoost12", "background_noise_wrapper", "pitch_wrapper", "reverb_wrapper"]
     num_additional_real: 3
@@ -27,4 +28,4 @@ mixup:
   random_mix: true
   tau: 0.07
   is_norm: true
-  n_synthetic: 8
+  n_synthetic: 2

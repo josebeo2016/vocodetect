@@ -83,7 +83,7 @@ class Dataset_for(Dataset):
     def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
                  augmentation_methods=[], num_additional_real=2, num_additional_spoof=2, 
                  trim_length=64000, wav_samp_rate=16000, noise_path=None, rir_path=None, 
-                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True):
+                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True, **kwargs):
         """
         Args:
             list_IDs (string): Path to the .lst file with real audio filenames.
@@ -132,7 +132,7 @@ class Dataset_for_dev(Dataset):
     def __init__(self, args, list_IDs, labels, base_dir, algo=5, vocoders=[], 
                  augmentation_methods=[], num_additional_real=2, num_additional_spoof=2, 
                  trim_length=64000, wav_samp_rate=16000, noise_path=None, rir_path=None, 
-                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True):
+                 aug_dir=None, online_aug=False, repeat_pad=True, is_train=True, **kwargs):
         self.list_IDs = list_IDs
         self.base_dir = os.path.join(base_dir)
         self.cut=trim_length 
