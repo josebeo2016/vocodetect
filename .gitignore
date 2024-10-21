@@ -152,4 +152,8 @@ traindata/asvspoof_2019_supcon/spoof_train/
 traindata/asvspoof_2019_supcon/spoof_dev/
 traindata/asvspoof_2019_supcon/spoof/
 
+# audio files
+*.wav
+*.mp3
+*.lyra
 .vscode/
