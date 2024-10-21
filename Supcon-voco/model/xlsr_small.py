@@ -16,7 +16,9 @@ class SSLModel(nn.Module):
         self.num_layers = num_layers
         self.order = order
         self.custom_order = custom_order
-        if self.num_layers < 1 or self.num_layers > 24:
+        if self.num_layers is None:
+            self.num_layers = 24
+        elif self.num_layers < 1 or self.num_layers > 24:
             raise ValueError(
                 "Number of layers must be at least 1 and at most 24.")
         

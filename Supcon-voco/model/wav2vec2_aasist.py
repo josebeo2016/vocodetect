@@ -578,6 +578,7 @@ class Model(nn.Module):
         if (self.is_train):
             return output, feats, last_hidden
         return output
+    
     def loss(self, output, feats, emb, labels, config, info=None):
         
         real_bzs = output.shape[0]

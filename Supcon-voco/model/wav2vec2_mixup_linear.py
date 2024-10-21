@@ -138,9 +138,11 @@ class HardNegativeMixup():
         new_labels: tensor, (batch + n_synthetic, ) [1, 1, 0, 1, ..., 0, 0]
         '''
         device = feats.device
-        # check number of negative samples
+        # check number of negative samples (different from the anchor)
         n_neg_samples = torch.sum(labels != labels[0]).item()
+        # print(labels)
         # print('n_neg_samples', n_neg_samples)
+        # print('n_synthetic', self.n_synthetic)
         assert n_neg_samples > self.n_synthetic, "Not enough negative samples"
         
         # get the indices of the hard negative samples
