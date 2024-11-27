@@ -9,8 +9,8 @@ model:
     resnet_type: '18'
     nclasses: 2
 data:
-  name: 'asvspoof_2019_mixup_1'
-  # name: 'eval_only'
+  # name: 'asvspoof_2019_mixup_1'
+  name: 'eval_only'
   kwargs:
     augmentation_methods: ["RawBoost12", "background_noise_wrapper", "pitch_wrapper", "reverb_wrapper"]
     num_additional_real: 3

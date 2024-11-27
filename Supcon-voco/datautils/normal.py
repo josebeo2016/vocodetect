@@ -155,11 +155,11 @@ class Dataset_for_dev(Dataset):
         return index, x_inp, target
 
 class Dataset_for_eval(Dataset):
-    def __init__(self, list_IDs, base_dir, padding_type='zero', trim_length=64000):
+    def __init__(self, list_IDs, base_dir, padding_type='zero', max_len=64000):
         self.list_IDs = list_IDs
         self.base_dir = base_dir
         self.padding_type = padding_type
-        self.trim_length=trim_length # take ~4 sec audio (64600 samples)
+        self.trim_length=max_len # take ~4 sec audio (64600 samples)
     def __len__(self):
         return len(self.list_IDs)
     
