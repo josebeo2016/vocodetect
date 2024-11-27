@@ -1,13 +1,8 @@
 model:
-  name: wav2vec2_linear_nll
+  name: wav2vec2_linear_nll_gelu
   flag_fix_ssl: false
   contra_mode: 'all' # 'one' or 'all'
-  loss_type: 4 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 4: only loss CE (no contrastive loss)
-  resnet:
-    num_nodes: 3
-    enc_dim: 256
-    resnet_type: '18'
-    nclasses: 2
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 4: only loss CE (no contrastive loss)
 data:
   name: 'normal'
   kwargs:

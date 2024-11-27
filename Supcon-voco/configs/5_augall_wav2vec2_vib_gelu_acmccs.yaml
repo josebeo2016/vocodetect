@@ -12,14 +12,15 @@ model:
     custom_order: null
 data:
   name: 'acmccs_augall_5'
+  # name: 'eval_only'
   kwargs:
     vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
-    augmentation_methods: ["RawBoost12", "background_noise_5_15", "reverb_1", "speed_01", "gaussian_1"]
+    augmentation_methods: ["RawBoost12", "background_noise_5_15", "reverb_1", "speed_01", "pitch_1"]
     num_additional_real: 1
     num_additional_spoof: 1
     trim_length: 64000
     wav_samp_rate: 16000
     online_aug: true
-    aug_dir: '/datab/phucdt/Asvspoof_aug'
+    aug_dir: '/datab/phucdt/tmp'
     noise_path: '/datab/Dataset/Noise/musan'
     rir_path: '/datab/Dataset/Noise//RIRS_NOISES'
