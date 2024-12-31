@@ -156,4 +156,5 @@ traindata/asvspoof_2019_supcon/spoof/
 *.wav
 *.mp3
 *.lyra
+*.flac
 .vscode/
