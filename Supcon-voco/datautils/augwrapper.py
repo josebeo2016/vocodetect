@@ -5,14 +5,15 @@ import torchaudio
 from torch import Tensor
 import librosa
 from datautils.RawBoost import ISD_additive_noise,LnL_convolutive_noise,SSI_additive_noise,normWav
-from datautils.audio_augmentor import BackgroundNoiseAugmentor, PitchAugmentor, ReverbAugmentor, SpeedAugmentor, VolumeAugmentor, TelephoneEncodingAugmentor, GaussianAugmentor, CopyPasteAugmentor, BaseAugmentor, TimeMaskingAugmentor, FrequencyMaskingAugmentor, MaskingAugmentor, TimeSwapAugmentor, FrequencySwapAugmentor, SwappingAugmentor, LinearFilterAugmentor, BandpassAugmentor
+from datautils.audio_augmentor import BackgroundNoiseAugmentor, PitchAugmentor, ReverbAugmentor, SpeedAugmentor, VolumeAugmentor, TelephoneEncodingAugmentor, GaussianAugmentor, CopyPasteAugmentor, BaseAugmentor, TimeMaskingAugmentor, FrequencyMaskingAugmentor, MaskingAugmentor, TimeSwapAugmentor, FrequencySwapAugmentor, SwappingAugmentor, LinearFilterAugmentor, BandpassAugmentor, EchoAugmentor
 from datautils.audio_augmentor.utils import pydub_to_librosa, librosa_to_pydub
 import soundfile as sf
 import random
 
 SUPPORTED_AUGMENTATION = [
-    'background_noise_5_15', 'pitch_1', 'volume_10', 'reverb_1', 'speed_01', 'telephone_g722', 'gaussian_1', 'gaussian_2', 'gaussian_2_5', 'gaussian_3',
-    'RawBoost12', 'copy_paste_80', 'copy_paste_r', 'time_masking', 'masking', 'time_swap', 
+    'background_noise_5_15', 'background_noise_3_20', 'pitch_1','pitch_5', 'volume_10', 'reverb_1', 'echo_1',
+    'speed_01', 'speed_02', 'telephone_g722', 'gaussian_1', 'gaussian_2', 'gaussian_2_5', 'gaussian_3',
+    'RawBoost12', 'RawBoostFull', 'copy_paste_80', 'copy_paste_r', 'time_masking', 'masking', 'time_swap', 
     'freq_swap', 'swapping', 'frequency_masking', 'linear_filter', 'mp32flac', 'ogg2flac', 'nonspeechtrim',
     'bandpass_0_4000', 'griffinlim_downsample', 'lowpass_hifigan_asvspoof5', 'lowpass_hifigan', 'librosa_downsample']
 
@@ -33,6 +34,37 @@ def audio_transform(filepath: str, aug_type: BaseAugmentor, config: dict, online
         return pydub_to_librosa(audio)
     else: 
         at.save()
+
+def background_noise_3_20(x, args, sr=16000, audio_path = None):
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path).split('.')[0]
+    args.input_path = os.path.dirname(audio_path)
+    aug_audio_path = os.path.join(aug_dir, 'background_noise', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'background_noise')
+    args.out_format = 'wav'
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+    config = {
+        "aug_type": "background_noise",
+        "output_path": args.output_path,
+        "out_format": args.out_format,
+        "noise_path": args.noise_path,
+        "min_SNR_dB": 3,
+        "max_SNR_dB": 20
+    }
+    if (args.online_aug):
+        waveform = audio_transform(filepath=audio_path, aug_type=BackgroundNoiseAugmentor, config=config, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            audio_transform(filepath=audio_path, aug_type=BackgroundNoiseAugmentor, config=config, online=False)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
         
 def background_noise_5_15(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
@@ -41,6 +73,9 @@ def background_noise_5_15(x, args, sr=16000, audio_path = None):
     aug_audio_path = os.path.join(aug_dir, 'background_noise', utt_id + '.wav')
     args.output_path = os.path.join(aug_dir, 'background_noise')
     args.out_format = 'wav'
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "background_noise",
         "output_path": args.output_path,
@@ -62,6 +97,74 @@ def background_noise_5_15(x, args, sr=16000, audio_path = None):
             waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
             return waveform
 
+def echo_1(x, args, sr=16000, audio_path = None):
+    """
+    cho added with delay between 0.1 and 1 second and decay between 0.3 and 0.9.
+    """
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path).split('.')[0]
+    aug_audio_path = os.path.join(aug_dir, 'echo', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'echo')
+    args.out_format = 'wav'
+    args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+    config = {
+        "aug_type": "echo",
+        "output_path": args.output_path,
+        "out_format": args.out_format,
+        "min_delay": 100,
+        "max_delay": 1000,
+        "min_decay": 0.3,
+        "max_decay": 0.9
+    }
+    if (args.online_aug):
+        waveform = audio_transform(filepath=audio_path, aug_type=EchoAugmentor, config=config, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            audio_transform(filepath=audio_path, aug_type=EchoAugmentor, config=config, online=False)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+
+def pitch_5(x, args, sr=16000, audio_path = None):
+    """
+    Augment the audio with pitch shift of -1 to 1
+    """
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path).split('.')[0]
+    aug_audio_path = os.path.join(aug_dir, 'pitch', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'pitch')
+    args.out_format = 'wav'
+    args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+    config = {
+        "aug_type": "pitch",
+        "output_path": args.output_path,
+        "out_format": args.out_format,
+        "min_pitch_shift": -5,
+        "max_pitch_shift": 5
+    }
+    if (args.online_aug):
+        waveform = audio_transform(filepath=audio_path, aug_type=PitchAugmentor, config=config, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            audio_transform(filepath=audio_path, aug_type=PitchAugmentor, config=config, online=False)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+
 def pitch_1(x, args, sr=16000, audio_path = None):
     """
     Augment the audio with pitch shift of -1 to 1
@@ -72,7 +175,9 @@ def pitch_1(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'pitch')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
-    
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "pitch",
         "output_path": args.output_path,
@@ -103,7 +208,9 @@ def volume_10(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'volume')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
-    
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "volume",
         "output_path": args.output_path,
@@ -134,6 +241,9 @@ def reverb_1(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'reverb')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "reverb",
         "output_path": args.output_path,
@@ -152,6 +262,38 @@ def reverb_1(x, args, sr=16000, audio_path = None):
             audio_transform(filepath=audio_path, aug_type=ReverbAugmentor, config=config, online=False)
             waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
             return waveform
+def speed_02(x, args, sr=16000, audio_path = None):
+    """
+    Augment the audio with speed change of 0.7 to 1.3
+    """
+    aug_dir = args.aug_dir
+    utt_id = os.path.basename(audio_path).split('.')[0]
+    aug_audio_path = os.path.join(aug_dir, 'speed', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'speed')
+    args.out_format = 'wav'
+    args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
+    config = {
+        "aug_type": "speed",
+        "output_path": args.output_path,
+        "out_format": args.out_format,
+        "min_speed_factor": 0.7,
+        "max_speed_factor": 1.3
+    }
+    if (args.online_aug):
+        waveform = audio_transform(filepath=audio_path, aug_type=SpeedAugmentor, config=config, online=True)
+        # waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        return waveform
+    else:
+        if os.path.exists(aug_audio_path):
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
+        else:
+            audio_transform(filepath=audio_path, aug_type=SpeedAugmentor, config=config, online=False)
+            waveform,_ = librosa.load(aug_audio_path, sr=sr, mono=True)
+            return waveform
 
 def speed_01(x, args, sr=16000, audio_path = None):
     """
@@ -163,6 +305,9 @@ def speed_01(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'speed')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "speed",
         "output_path": args.output_path,
@@ -193,6 +338,9 @@ def telephone_g722(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'telephone')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "telephone",
         "output_path": args.output_path,
@@ -226,6 +374,9 @@ def bandpass_0_4000(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'bandpass')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "bandpass",
         "output_path": args.output_path,
@@ -256,12 +407,15 @@ def gaussian_1(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'gaussian_noise')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "guassian_noise",
         "output_path": args.output_path,
         "out_format": args.out_format,
-        "min_amplitude": 0.001,
-        "max_amplitude": 0.015
+        "min_amplitude": 0.01,
+        "max_amplitude": 0.2
     }
     if (args.online_aug):
         waveform = audio_transform(filepath=audio_path, aug_type=GaussianAugmentor, config=config, online=True)
@@ -286,6 +440,9 @@ def gaussian_2(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'gaussian_noise')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "guassian_noise",
         "output_path": args.output_path,
@@ -316,6 +473,9 @@ def gaussian_2_5(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'gaussian_noise')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "guassian_noise",
         "output_path": args.output_path,
@@ -346,6 +506,9 @@ def gaussian_3(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'gaussian_noise')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "guassian_noise",
         "output_path": args.output_path,
@@ -376,6 +539,9 @@ def copy_paste_r(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'copy_paste')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "copy_paste",
         "output_path": args.output_path,
@@ -406,6 +572,9 @@ def copy_paste_80(x, args, sr=16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'copy_paste')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     config = {
         "aug_type": "copy_paste",
         "output_path": args.output_path,
@@ -437,6 +606,9 @@ def masking(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'masking')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "masking",
@@ -475,6 +647,9 @@ def time_swap(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'time_swap')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "time_swap",
@@ -509,6 +684,9 @@ def freq_swap(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'freq_swap')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "freq_swap",
@@ -543,6 +721,9 @@ def swapping(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'swapping')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "swapping",
@@ -577,6 +758,9 @@ def linear_filter(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'linear_filter')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "linear_filter",
@@ -612,6 +796,9 @@ def time_masking(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'time_masking')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "time_masking",
@@ -643,6 +830,9 @@ def frequency_masking(x, args, sr=16000, audio_path=None):
     args.output_path = os.path.join(aug_dir, 'frequency_masking')
     args.out_format = 'wav'
     args.input_path = os.path.dirname(audio_path)
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     
     config = {
         "aug_type": "frequency_masking",
@@ -656,12 +846,12 @@ def frequency_masking(x, args, sr=16000, audio_path=None):
         waveform, _ = librosa.load(aug_audio_path, sr=sr, mono=True)
         return waveform
     else:
-        # augmentor = FrequencyMaskingAugmentor(config)
-        # augmentor.load(audio_path)
-        # augmentor.transform()
-        # augmentor.save()
-        # waveform, _ = librosa.load(aug_audio_path, sr=sr, mono=True)
-        waveform, _ = librosa.load(audio_path, sr=sr, mono=True)
+        augmentor = FrequencyMaskingAugmentor(config)
+        augmentor.load(audio_path)
+        augmentor.transform()
+        augmentor.save()
+        waveform, _ = librosa.load(aug_audio_path, sr=sr, mono=True)
+        # waveform, _ = librosa.load(audio_path, sr=sr, mono=True)
         return waveform
     
 def mp32flac(x, args, sr=16000, audio_path = None):
@@ -672,7 +862,11 @@ def mp32flac(x, args, sr=16000, audio_path = None):
     # print('mp32flac: audio_path:', audio_path)
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
-    aug_path = os.path.join(aug_dir, 'mp32flac', utt_id + '_from_mp3.flac')
+    aug_path = os.path.join(aug_dir, 'mp32flac', utt_id + '.flac')
+    args.output_path = os.path.join(aug_dir, 'mp32flac')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -697,7 +891,11 @@ def ogg2flac(x, args, sr=16000, audio_path = None):
     # print('ogg2flac: audio_path:', audio_path)
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
-    aug_path = os.path.join(aug_dir, 'ogg2flac', utt_id + '_from_ogg.flac')
+    aug_path = os.path.join(aug_dir, 'ogg2flac', utt_id + '.flac')
+    args.output_path = os.path.join(aug_dir, 'ogg2flac')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -722,7 +920,10 @@ def nonspeechtrim(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_path = os.path.join(aug_dir, 'nonspeechtrim', utt_id + '.wav')
-    
+    args.output_path = os.path.join(aug_dir, 'nonspeechtrim')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
         return waveform
@@ -743,6 +944,10 @@ def griffinlim_downsample(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_path = os.path.join(aug_dir, 'griffinlim_downsample', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'griffinlim_downsample')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -769,6 +974,10 @@ def librosa_downsample(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_path = os.path.join(aug_dir, 'librosa_downsample', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'librosa_downsample')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -790,6 +999,10 @@ def lowpass_hifigan_asvspoof5(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_path = os.path.join(aug_dir, 'lowpass_hifigan_asvspoof5', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'lowpass_hifigan_asvspoof5')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -807,6 +1020,10 @@ def lowpass_hifigan(x, args, sr=16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_path = os.path.join(aug_dir, 'lowpass_hifigan', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'lowpass_hifigan')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     # check if the augmented file exists
     if (os.path.exists(aug_path)):
         waveform,_ = librosa.load(aug_path, sr=sr, mono=True)
@@ -821,6 +1038,10 @@ def RawBoost12(x, args, sr = 16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_audio_path = os.path.join(aug_dir, 'RawBoost12', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'RawBoost12')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     if args.online_aug:
         return process_Rawboost_feature(x, sr,args, algo=5)
     else:
@@ -841,6 +1062,10 @@ def RawBoostFull(x, args, sr = 16000, audio_path = None):
     aug_dir = args.aug_dir
     utt_id = os.path.basename(audio_path).split('.')[0]
     aug_audio_path = os.path.join(aug_dir, 'RawBoostFull', utt_id + '.wav')
+    args.output_path = os.path.join(aug_dir, 'RawBoostFull')
+    # check if the directory exists
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     if args.online_aug:
         return process_Rawboost_feature(x, sr,args, algo=4)
     else:

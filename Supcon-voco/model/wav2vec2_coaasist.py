@@ -413,7 +413,7 @@ class Residual_block(nn.Module):
         return out
 
 
-class W2V2_COAASIST(nn.Module):
+class Model(nn.Module):
     def __init__(self, args,device, is_train = True):
         super().__init__()
         self.flag_fix_ssl = args['flag_fix_ssl']
@@ -706,7 +706,7 @@ class Res2Net(nn.Module):
 
 
 class W2V2_RES2NET_COAASIST(nn.Module):
-    def __init__(self, device, ssl_cpkt_path, emb_size=128, heads=4, ffmult=4, exp_fac=2, kernel_size=31, n_encoders=4):
+    def __init__(self, args, device, ssl_cpkt_path='./pretrained/xlsr2_300m.pt', emb_size=128, heads=4, ffmult=4, exp_fac=2, kernel_size=31, n_encoders=4):
         super().__init__()
         self.dim_head = int(emb_size/heads)
         # AASIST parameters

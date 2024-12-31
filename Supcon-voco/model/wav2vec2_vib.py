@@ -199,7 +199,7 @@ class Model(nn.Module):
         else:
             # in inference mode, we don't need the emb
             # the x_big now is a tensor of [bz, length]
-            print("Inference mode")
+            # print("Inference mode")
             
             return self._forward(x_big)
         

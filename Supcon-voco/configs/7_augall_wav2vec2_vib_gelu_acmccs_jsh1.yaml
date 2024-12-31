@@ -1,6 +1,6 @@
 # 1 anchor, 5 aug anchor, 1 other real, 3 vocoded, 3 aug vocoded - with RawBoost only, 1 other spoof
 model:
-  name: wav2vec2_960_vib_gelu_multi
+  name: wav2vec2_vib_gelu
   flag_fix_ssl: false
   contra_mode: 'all' # 'one' or 'all'
   loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only
@@ -12,13 +12,13 @@ model:
     custom_order: null
 data:
   # portion: 0.2 # test with 0.01 dataset
-  name: 'acmccs_augall_6'
+  name: 'acmccs_augall_7'
   kwargs:
     vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
-    augmentation_methods: ["RawBoost12", "background_noise_5_15", "reverb_1", "telephone_g722", "pitch_1", "gaussian_1", 'mp32flac', 'ogg2flac', 'nonspeechtrim', "volume_10"]
+    augmentation_methods: ["RawBoostFull", "background_noise_3_20", "reverb_1", "telephone_g722", "gaussian_1", 'mp32flac', 'ogg2flac', 'nonspeechtrim', "volume_10", "echo_1"]
     num_additional_real: 1
     num_additional_spoof: 1
-    trim_length: 96000 # 6s
+    trim_length: 64600 # 4s
     wav_samp_rate: 16000
     online_aug: true
     aug_dir: '/dataa/phucdt/vocodetect/traindata/augment_tmp'

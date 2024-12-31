@@ -15,6 +15,7 @@ from .freq_swap import FrequencySwapAugmentor
 from .swapping import SwappingAugmentor
 from .linear_filter import LinearFilterAugmentor
 from .bandpass import BandpassAugmentor
+from .echo import EchoAugmentor
 
 
 # from . import utils
@@ -30,7 +31,7 @@ from .__version__ import (
     __version__,
 )
 
-SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise', 'time_masking', 'freq_masking', 'masking', 'time_swap', 'freq_swap', 'swapping', 'linear_filter', 'bandpass']
+SUPPORTED_AUGMENTORS = ['background_noise', 'pitch', 'speed', 'volume', 'reverb', 'telephone', 'gaussian_noise', 'time_masking', 'freq_masking', 'masking', 'time_swap', 'freq_swap', 'swapping', 'linear_filter', 'bandpass', 'echo']
 
 import logging.config
 LOGGING = {
