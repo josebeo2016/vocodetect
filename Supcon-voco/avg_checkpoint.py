@@ -3,6 +3,7 @@ import os
 from glob import glob
 import sys
 
+N_CHECKPOINTS = 5
 def load_checkpoint(filepath):
     return torch.load(filepath)
 
@@ -40,11 +41,12 @@ if __name__ == '__main__':
         print("Directory not found")
         sys.exit(1)
     # get all the pt or pth files in the directory
-    checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.endswith('.pt') or f.endswith('.pth')]
+    checkpoint_files = [f for f in os.listdir(checkpoint_dir) if ('epoch' in f) and (f.endswith('.pth'))]
     # sort as the modification time
     checkpoint_files.sort(key=lambda x: os.path.getmtime(os.path.join(checkpoint_dir, x)))
-    # keep only the last 5 checkpoints
-    checkpoint_files = checkpoint_files[-5:]
+    # keep only the last n checkpoints
+    checkpoint_files = checkpoint_files[-N_CHECKPOINTS:]
+    print("Checkpoints to average: ", checkpoint_files)
     # load and average the checkpoints
     avg_checkpoint = None
     avg_checkpoint = average_checkpoints([os.path.join(checkpoint_dir, f) for f in checkpoint_files])
