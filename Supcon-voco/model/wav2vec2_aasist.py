@@ -401,6 +401,79 @@ class Residual_block(nn.Module):
         #out = self.mp(out)
         return out
 
+class BackEnd(nn.Module):
+    """Back End Wrapper
+    """
+    def __init__(self, input_dim, out_dim, num_classes, 
+                  hidden_dim=[64,64], dropout_rate=0.5, dropout_flag=True):
+        super(BackEnd, self).__init__()
+
+        # input feature dimension
+        self.in_dim = input_dim
+        # output embedding dimension
+        self.out_dim = out_dim
+        # number of output classes
+        self.num_class = num_classes
+        # hidden dimension
+        self.hidden_dim = hidden_dim
+        
+        # dropout rate
+        self.m_mcdp_rate = dropout_rate
+        self.m_mcdp_flag = dropout_flag
+        
+        # a simple full-connected network for frame-level feature processing
+        self.m_frame_level = nn.Sequential(
+            nn.Linear(self.in_dim, self.hidden_dim[0]),
+            nn.GELU(),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            
+            nn.Linear(self.hidden_dim[0], self.hidden_dim[1]),
+            nn.GELU(),
+            torch.nn.Dropout(self.m_mcdp_rate),
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
+            
+            nn.Linear(self.hidden_dim[1], self.out_dim),
+            nn.GELU(),
+            torch.nn.Dropout(self.m_mcdp_rate)
+        )
+            # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag))
+
+        # linear layer to produce output logits 
+        self.m_utt_level = nn.Linear(self.out_dim, self.num_class)
+        
+        return
+    # def initialize_parameters(self):
+    #     """Randomly initialize the parameters of the model."""
+    #     for module in self.modules():
+    #         if isinstance(module, nn.Linear):
+    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='gelu')
+    #             if module.bias is not None:
+    #                 nn.init.constant_(module.bias, 0)
+                    
+    def forward(self, feat):
+        """ logits, emb_vec = back_end_emb(feat)
+
+        input:
+        ------
+          feat: tensor, (batch, frame_num, feat_feat_dim)
+
+        output:
+        -------
+          logits: tensor, (batch, num_output_class)
+          emb_vec: tensor, (batch, emb_dim)
+        
+        """
+        # through the frame-level network
+        # (batch, frame_num, self.out_dim)
+        feat_ = self.m_frame_level(feat)
+        
+        # average pooling -> (batch, self.out_dim)
+        feat_utt = feat_.mean(1)
+        
+        # output linear 
+        logits = self.m_utt_level(feat_utt)
+        return logits, feat_utt
 
 class Model(nn.Module):
     def __init__(self, args,device, is_train = True):
@@ -416,7 +489,8 @@ class Model(nn.Module):
         gat_dims = args['aasist']['gat_dims']
         pool_ratios = args['aasist']['pool_ratios']
         temperatures =  args['aasist']['temperatures']
-    
+        
+        self.is_freeze_frontend = args['is_freeze_frontend']
 
         ####
         # create network wav2vec 2.0
@@ -479,8 +553,21 @@ class Model(nn.Module):
         self.pool_hT2 = GraphPool(pool_ratios[2], gat_dims[1], 0.3)
         
         self.out_layer = nn.Linear(5 * gat_dims[1], args['aasist']['nclasses'])
+        # Post-processing
+        if self.is_freeze_frontend:
+            self.backend_stage2 = BackEnd(64, 64, args['aasist']['nclasses'], [256,128], 0.5, False)
+            self.freeze_layers()
+    
+    def freeze_layers(self):
+        # Freeze all parameters
+        for param in self.parameters():
+            param.requires_grad = False
+        
+        # Unfreeze the backend parameters
+        for param in self.backend_stage2.parameters():
+            param.requires_grad = True
 
-    def forward(self, x):
+    def _forward(self, x):
        #-------pre-trained Wav2vec model fine tunning ------------------------##
         if self.flag_fix_ssl:
             with torch.no_grad():
@@ -579,10 +666,153 @@ class Model(nn.Module):
             return output, feats, last_hidden
         return output
     
+    def _forward_freeze(self, x):
+        with torch.no_grad():
+        #-------pre-trained Wav2vec model fine tunning ------------------------##
+            if self.flag_fix_ssl:
+                with torch.no_grad():
+                    x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
+            else:
+                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
+            x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+            feats = x
+            
+            # post-processing on front-end features
+            x = x.transpose(1, 2)   #(bs,feat_out_dim,frame_number)
+            x = x.unsqueeze(dim=1) # add channel 
+            x = F.max_pool2d(x, (3, 3))
+            x = self.first_bn(x)
+            x = self.selu(x)
+
+            # RawNet2-based encoder
+            x = self.encoder(x)
+            x = self.first_bn1(x)
+            x = self.selu(x)
+            
+            w = self.attention(x)
+            
+            #------------SA for spectral feature-------------#
+            w1 = F.softmax(w,dim=-1)
+            m = torch.sum(x * w1, dim=-1)
+            e_S = m.transpose(1, 2) + self.pos_S 
+            
+            # graph module layer
+            gat_S = self.GAT_layer_S(e_S)
+            out_S = self.pool_S(gat_S)  # (#bs, #node, #dim)
+            
+            #------------SA for temporal feature-------------#
+            w2 = F.softmax(w,dim=-2)
+            m1 = torch.sum(x * w2, dim=-2)
+        
+            e_T = m1.transpose(1, 2)
+        
+            # graph module layer
+            gat_T = self.GAT_layer_T(e_T)
+            out_T = self.pool_T(gat_T)
+            
+            # learnable master node
+            master1 = self.master1.expand(x.size(0), -1, -1)
+            master2 = self.master2.expand(x.size(0), -1, -1)
+
+            # inference 1
+            out_T1, out_S1, master1 = self.HtrgGAT_layer_ST11(
+                out_T, out_S, master=self.master1)
+
+            out_S1 = self.pool_hS1(out_S1)
+            out_T1 = self.pool_hT1(out_T1)
+
+            out_T_aug, out_S_aug, master_aug = self.HtrgGAT_layer_ST12(
+                out_T1, out_S1, master=master1)
+            out_T1 = out_T1 + out_T_aug
+            out_S1 = out_S1 + out_S_aug
+            master1 = master1 + master_aug
+
+            # inference 2
+            out_T2, out_S2, master2 = self.HtrgGAT_layer_ST21(
+                out_T, out_S, master=self.master2)
+            out_S2 = self.pool_hS2(out_S2)
+            out_T2 = self.pool_hT2(out_T2)
+
+            out_T_aug, out_S_aug, master_aug = self.HtrgGAT_layer_ST22(
+                out_T2, out_S2, master=master2)
+            out_T2 = out_T2 + out_T_aug
+            out_S2 = out_S2 + out_S_aug
+            master2 = master2 + master_aug
+
+            out_T1 = self.drop_way(out_T1)
+            out_T2 = self.drop_way(out_T2)
+            out_S1 = self.drop_way(out_S1)
+            out_S2 = self.drop_way(out_S2)
+            master1 = self.drop_way(master1)
+            master2 = self.drop_way(master2)
+
+            out_T = torch.max(out_T1, out_T2)
+            out_S = torch.max(out_S1, out_S2)
+            master = torch.max(master1, master2)
+
+            # Readout operation
+            T_max, _ = torch.max(torch.abs(out_T), dim=1)
+            T_avg = torch.mean(out_T, dim=1)
+
+            S_max, _ = torch.max(torch.abs(out_S), dim=1)
+            S_avg = torch.mean(out_S, dim=1)
+            
+            last_hidden = torch.cat(
+                [T_max, T_avg, S_max, S_avg, master.squeeze(1)], dim=1)
+            
+            last_hidden = self.drop(last_hidden)
+        if (self.is_freeze_frontend):
+            output = self.backend_stage2(last_hidden)
+        else:
+            output = self.out_layer(last_hidden)
+        if (self.is_train):
+            return output, feats, last_hidden
+        return output
+    
+    def forward(self, x):
+        """
+        x: input tensor. Could be shape
+        - (batch_size, length)
+        - (batch_size, num_view, length)
+        """
+        # print("x.dim: ", x.dim())
+        # print("x.shape: ", x.shape)
+        if x.dim() == 3:
+            bzs, num_view, length = x.shape
+            reshaped_tensor = x.view(bzs * num_view, length)
+            # print("reshaped_tensor.shape", reshaped_tensor.shape)
+            if self.is_train:
+                output, feats, last_hidden = self._forward(reshaped_tensor)
+                # convert back to original shape
+                bz, *rest = output.shape
+                output = output.view(bz // num_view, num_view, *rest)
+                bz, *rest = feats.shape
+                feats = feats.view(bz // num_view, num_view, *rest)
+                bz, *rest = last_hidden.shape
+                last_hidden = last_hidden.view(bz // num_view, num_view, *rest)
+                return output, feats, last_hidden
+            else:
+                output = self._forward(reshaped_tensor)
+                # convert back to original shape
+                bzs, *rest = output.shape
+                output = output.view(bzs // num_view, num_view, *rest)
+                return output
+        else:
+            # print("Small batch size")
+            reshaped_tensor = x
+            return self._forward(reshaped_tensor)
+
     def loss(self, output, feats, emb, labels, config, info=None):
         
-        real_bzs = output.shape[0]
-        n_views = 1.0
+        # get loss weights from config, default is 1.0
+        weight_CE = config['model']['weight_CE'] if 'weight_CE' in config['model'] else 1.0
+        weight_CF1 = config['model']['weight_CF1'] if 'weight_CF1' in config['model'] else 1.0
+        weight_CF2 = config['model']['weight_CF2'] if 'weight_CF2' in config['model'] else 1.0
+        
+        batch_size = output.shape[0]
+        n_views = output.shape[1]
+        real_bzs = batch_size * n_views
+        
         loss_CE = torch.nn.CrossEntropyLoss()
         
         sim_metric_seq = lambda mat1, mat2: torch.bmm(
@@ -590,18 +820,26 @@ class Model(nn.Module):
         
         # print("output.shape", output.shape)
         # print("labels.shape", labels.shape)
-        L_CE = 1/real_bzs *loss_CE(output, labels)
-        
+        if len(output.shape) == 3:
+            CE_labels = labels.repeat(n_views) # repeat the labels for CE loss
+            CE_output = output.view(batch_size*n_views, -1)
+            L_CE = weight_CE * 1/real_bzs *loss_CE(CE_output, CE_labels)
+        else:
+            L_CE = weight_CE * 1/real_bzs *loss_CE(output, labels)
+        if config['model']['loss_type'] == 4:
+            return {'L_CE':L_CE}
         # reshape the feats to match the supcon loss format
-        feats = feats.unsqueeze(1)
+        if feats.dim() == 3:
+            feats = feats.unsqueeze(1)
         # print("feats.shape", feats.shape)
-        L_CF1 = 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        L_CF1 = weight_CF1 * 1/real_bzs * supcon_loss(feats, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
-        emb = emb.unsqueeze(1)
+        if emb.dim() == 2:
+            emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        L_CF2 = weight_CF2 * 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         if config['model']['loss_type'] == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2}

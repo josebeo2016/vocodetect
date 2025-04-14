@@ -10,12 +10,12 @@ import fairseq
 import os
 try:
     from model.loss_metrics import supcon_loss
-    # from model.xlsr import SSLModel
-    from model.xlsr_small import SSLModel
+    from model.RawNet3 import RawNet3
+    from model.RawNet3.RawNetBasicBlock import Bottle2neck
 except:
     from loss_metrics import supcon_loss
-    # from xlsr import SSLModel
-    from .xlsr_small import SSLModel
+    from .RawNet3.RawNetBasicBlock import Bottle2neck
+    from .RawNet3.model import RawNet3
 
 
 ___author__ = "Hemlata Tak"
@@ -38,7 +38,7 @@ class BackEnd(nn.Module):
     """Back End Wrapper
     """
     def __init__(self, input_dim, out_dim, num_classes, 
-                  hidden_dim=[64,64], dropout_rate=0.5, dropout_flag=True):
+                 dropout_rate, dropout_flag=True, pooling='mean'):
         super(BackEnd, self).__init__()
 
         # input feature dimension
@@ -47,8 +47,8 @@ class BackEnd(nn.Module):
         self.out_dim = out_dim
         # number of output classes
         self.num_class = num_classes
-        # hidden dimension
-        self.hidden_dim = hidden_dim
+        # pooling
+        self.pooling = pooling
         
         # dropout rate
         self.m_mcdp_rate = dropout_rate
@@ -56,17 +56,17 @@ class BackEnd(nn.Module):
         
         # a simple full-connected network for frame-level feature processing
         self.m_frame_level = nn.Sequential(
-            nn.Linear(self.in_dim, self.hidden_dim[0]),
+            nn.Linear(self.in_dim, self.in_dim),
             nn.GELU(),
             torch.nn.Dropout(self.m_mcdp_rate),
             # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
-            nn.Linear(self.hidden_dim[0], self.hidden_dim[1]),
+            nn.Linear(self.in_dim, self.in_dim),
             nn.GELU(),
             torch.nn.Dropout(self.m_mcdp_rate),
             # DropoutForMC(self.m_mcdp_rate,self.m_mcdp_flag),
             
-            nn.Linear(self.hidden_dim[1], self.out_dim),
+            nn.Linear(self.in_dim, self.out_dim),
             nn.GELU(),
             torch.nn.Dropout(self.m_mcdp_rate)
         )
@@ -76,14 +76,7 @@ class BackEnd(nn.Module):
         self.m_utt_level = nn.Linear(self.out_dim, self.num_class)
         
         return
-    # def initialize_parameters(self):
-    #     """Randomly initialize the parameters of the model."""
-    #     for module in self.modules():
-    #         if isinstance(module, nn.Linear):
-    #             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='gelu')
-    #             if module.bias is not None:
-    #                 nn.init.constant_(module.bias, 0)
-                    
+
     def forward(self, feat):
         """ logits, emb_vec = back_end_emb(feat)
 
@@ -100,9 +93,17 @@ class BackEnd(nn.Module):
         # through the frame-level network
         # (batch, frame_num, self.out_dim)
         feat_ = self.m_frame_level(feat)
-        
+        if (self.pooling=='mean'):
+            # average pooling -> (batch, self.out_dim)
+            feat_utt = feat_.mean(1)
+        else:
+            # max pooling -> (batch, self.out_dim)
+            feat_utt = feat_.max(1)[0]
         # average pooling -> (batch, self.out_dim)
-        feat_utt = feat_.mean(1)
+        # feat_utt = feat_.mean(1)
+        
+        # max pooling -> (batch, self.out_dim)
+        feat_utt = feat_.max(1)[0]
         
         # output linear 
         logits = self.m_utt_level(feat_utt)
@@ -164,78 +165,81 @@ class Model(nn.Module):
         # create network wav2vec 2.0
         ####
         # self.ssl_model = SSLModel(self.device)
-        self.ssl_model = SSLModel(self.device, num_layers=args['xlsr']['num_layers'], order=args['xlsr']['order'], custom_order=args['xlsr']['custom_order'])
-        self.is_freeze_frontend = False if 'is_freeze_frontend' not in args else args['is_freeze_frontend']
+        self.front_end = RawNet3(
+            Bottle2neck,
+            model_scale=8,
+            context=True,
+            summed=True,
+            encoder_type="ECA",
+            nOut=256,
+            out_bn=False,
+            sinc_stride=10,
+            log_sinc=True,
+            norm_sinc="mean",
+            grad_mult=1,
+        ).to(device)
         
-        self.LL = nn.Linear(self.ssl_model.out_dim, 128)
+        self.LL = nn.Linear(self.front_end.out_dim, 128)
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.first_bn1 = nn.BatchNorm2d(num_features=64)
         self.drop = nn.Dropout(0.5, inplace=True)
+        self.is_freeze_frontend = False if 'is_freeze_frontend' not in args else args['is_freeze_frontend']
+        
         self.selu = nn.SELU(inplace=True)
         nclasses = args['nclasses'] if 'nclasses' in args else 2
         self.loss_CE = nn.CrossEntropyLoss()
         self.VIB = VIB(128, 128, 64)
-        self.backend = BackEnd(64, 64, nclasses, [64,64], 0.5, False)
+        self.backend = BackEnd(64, 64, nclasses, 0.5, False)
         
         self.sim_metric_seq = lambda mat1, mat2: torch.bmm(
             mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
         # Post-processing
         if self.is_freeze_frontend:
-            self.backend_stage2 = BackEnd(64, 64, nclasses, [256,128], 0.5, False)
             self.freeze_layers()
-            
+            self.backend_stage2 = BackEnd(64, 64, nclasses, 0.5, False)
     def freeze_layers(self):
         # Freeze all parameters
         for param in self.parameters():
             param.requires_grad = False
         
         # Unfreeze the backend parameters
-        for param in self.backend_stage2.parameters():
+        for param in self.backend.parameters():
             param.requires_grad = True
-        
+                
     def _forward(self, x):
-        #-------pre-trained Wav2vec model fine tunning ------------------------##
-        if self.flag_fix_ssl:
-            with torch.no_grad():
-                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
-        else:
-            x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
-        x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+        #-----------------RawNet3-----------------#
+        x, w = self.front_end(x) #(bs,frame_number,frontend_out_dim)
+
+        x = self.LL(x) #(bs,frame_number,feat_out_dim)
         feats = x
         x = nn.GELU()(x)
         
         # VIB
         # x [batch, frame_number, 64]
         x, decoded, mu, logvar = self.VIB(x)
-        z = x
-        # print("z.shape", z.shape) # (batch, length, 64)
+        
         # output [batch, 2]
         # emb [batch, 64]
         output, emb = self.backend(x)
         # output = F.log_softmax(output, dim=1)
-        # print("output.shape", output.shape)
-        output = torch.softmax(output, dim=1)
+        output = F.softmax(output, dim=1)
         if (self.is_train):
             return output, (decoded, mu, logvar, feats), emb
         return output
     
     def _forward_freeze(self, x):
-        
-        #-------pre-trained Wav2vec model fine tunning ------------------------##
+        #-----------------RawNet3-----------------#
+        # freeze the front end
         with torch.no_grad():
-            if self.flag_fix_ssl:
-                with torch.no_grad():
-                    x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = False)
-            else:
-                x_ssl_feat = self.ssl_model.extract_feat(x.squeeze(-1), is_train = self.is_train) #(bs,frame_number,feat_dim)
-            x = self.LL(x_ssl_feat) #(bs,frame_number,feat_out_dim)
+            x, w = self.front_end(x) #(bs,frame_number,frontend_out_dim)
+            x = self.LL(x) #(bs,frame_number,feat_out_dim)
             feats = x
             x = nn.GELU()(x)
             
             # VIB
             # x [batch, frame_number, 64]
             x, decoded, mu, logvar = self.VIB(x)
-            
+        
         # output [batch, 2]
         # emb [batch, 64]
         if self.is_freeze_frontend:
@@ -243,8 +247,7 @@ class Model(nn.Module):
         else:
             output, emb = self.backend(x)
         # output = F.log_softmax(output, dim=1)
-        # apply sigmoid
-        output = torch.softmax(output, dim=1)
+        output = F.softmax(output, dim=1)
         if (self.is_train):
             return output, (decoded, mu, logvar, feats), emb
         return output
@@ -266,6 +269,29 @@ class Model(nn.Module):
             # the x_big now is a tensor of [bz, length]
             # print("Inference mode")
             return self._forward(x_big)
+    
+    # def forward(self, x_big):
+    #     # make labels to be a tensor of [bz]
+    #     # labels = labels.squeeze(0)
+    #     if (x_big.dim() == 3):
+    #         x_big = x_big.transpose(0,1)
+    #         batch, length, sample_per_batch = x_big.shape
+    #         # x_big is a tensor of [length, batch, sample per batch]
+    #         # transform to [length, batch*sample per batch] by concat last dim
+    #         x_big = x_big.transpose(1,2)
+    #         x_big = x_big.reshape(batch * sample_per_batch, length)
+    #     if (self.is_train):
+    #         # x_big is a tensor of [1, length, bz]
+    #         # convert to [bz, length]
+    #         # x_big = x_big.squeeze(0).transpose(0,1)
+    #         output, feats, emb = self._forward(x_big)
+    #         # calculate the loss
+    #         return output, feats, emb
+    #     else:
+    #         # in inference mode, we don't need the emb
+    #         # the x_big now is a tensor of [bz, length]
+    #         # print("Inference mode")
+    #         return self._forward(x_big)
         
     
     def loss(self, output, feats, emb, labels, config, info=None):
@@ -291,14 +317,15 @@ class Model(nn.Module):
         if config['model']['loss_type'] == 4:
             L_CE = weight_CE * 1/real_bzs *loss_CE(output, labels)
             return {'L_CE':L_CE}
+        
         decoded, mu, logvar, feats_w2v = feats
         
         sim_metric_seq = lambda mat1, mat2: torch.bmm(
             mat1.permute(1, 0, 2), mat2.permute(1, 2, 0)).mean(0)
         
         # print("output.shape", output.shape)
-        # print("labels.shape", labels.shape)        
-        L_CE = weight_CE * 1/real_bzs * loss_CE(output, labels)
+        # print("labels.shape", labels.shape)
+        L_CE = weight_CE * 1/real_bzs *loss_CE(output, labels)
         
         # Recon loss
         # print("decoded: ", decoded.shape)
@@ -315,18 +342,16 @@ class Model(nn.Module):
         # reshape the feats_w2v to match the supcon loss format
         feats_w2v = feats_w2v.unsqueeze(1)
         # print("feats_w2v.shape", feats_w2v.shape)
-        L_CF1 = weight_CF1 * 1/real_bzs * supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        L_CF1 = weight_CF1* 1/real_bzs * supcon_loss(feats_w2v, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         # reshape the emb to match the supcon loss format
         emb = emb.unsqueeze(1)
         emb = emb.unsqueeze(-1)
         # print("emb.shape", emb.shape)
-        L_CF2 = weight_CF2 * 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
+        L_CF2 = weight_CF2* 1/real_bzs *supcon_loss(emb, labels=labels, contra_mode=config['model']['contra_mode'], sim_metric=sim_metric_seq)
         
         if config['model']['loss_type'] == 1:
             return {'L_CE':L_CE, 'L_CF1':L_CF1, 'L_CF2':L_CF2, 'Recon_loss':Recon_loss}
-        # if config['model']['loss_type'] == 1:
-        #     return {'L_CE':L_CE, 'L_CF2':L_CF2, 'Recon_loss':Recon_loss}
         elif config['model']['loss_type'] == 2:
             return {'L_CE':L_CE, 'L_CF1':L_CF1}
         elif config['model']['loss_type'] == 3:
