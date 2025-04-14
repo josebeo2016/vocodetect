@@ -11,6 +11,38 @@ from logger import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+def process_audio_samples(audio_list, trim_length, padding_type='zero'):
+    processed_audios = []
+
+    for audio in audio_list:
+        processed_audios.append(pad(audio, padding_type=padding_type, max_len=trim_length))
+    return processed_audios
+
+def multiview_process_audio(audio_list, audio_paths, args, trim_length=64000, sr=16000, augmentation_func=None, padding_type='zero'):
+    if audio_paths is None or len(audio_paths) != len(audio_list):
+        raise ValueError("audio_paths must be provided and match the length of audio_list.")
+
+    # Ensure all input audios are the same length
+    original_audios = process_audio_samples(audio_list, trim_length, padding_type=padding_type)
+    
+    augmented_audios = []
+    
+    for i, (audio, path) in enumerate(zip(original_audios, audio_paths)):
+        # Augment the audio using the specified function
+        aug_audio = augmentation_func(audio, args, sr=sr, audio_path=path)
+        
+        # Check if augmented audio is the same length as the original
+        if aug_audio.shape[0] != trim_length:
+            # Trim or zero pad to make it equal
+            aug_audio = process_audio_samples([aug_audio], trim_length, padding_type=padding_type)[0]
+        
+        augmented_audios.append(aug_audio)
+    
+    # Create a multiview tensor
+    multiview_tensor = np.stack([original_audios, augmented_audios], axis=1)
+    
+    return multiview_tensor # [num_samples, num_views, trim_length]
+
 def load_audio(file_path: str, sr: int=16000) -> np.ndarray:
     '''
     Load audio file

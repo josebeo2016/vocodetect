@@ -107,7 +107,7 @@ class Dataset_for(Dataset):
             
             
 class Dataset_for_eval(Dataset):
-    def __init__(self, list_IDs, base_dir, max_len=64600, padding_type="zero"):
+    def __init__(self, list_IDs, base_dir, max_len=64600, padding_type="zero", **kwargs):
         self.list_IDs = list_IDs
         self.base_dir = os.path.join(base_dir)
         self.cut=max_len # take ~4 sec audio (64600 samples)

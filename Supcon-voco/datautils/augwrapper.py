@@ -1041,7 +1041,7 @@ def RawBoost12(x, args, sr = 16000, audio_path = None):
     args.output_path = os.path.join(aug_dir, 'RawBoost12')
     # check if the directory exists
     if not os.path.exists(args.output_path):
-        os.makedirs(args.output_path)
+        os.makedirs(args.output_path, exist_ok=True)
     if args.online_aug:
         return process_Rawboost_feature(x, sr,args, algo=5)
     else:

@@ -150,7 +150,8 @@ class Dataset_for(Dataset):
         # augment the additional spoof samples
         augmented_additional_spoofs = []
         for i in range(self.num_additional_spoof):
-            augmethod_index = random.choice(range(len(self.augmentation_methods)))
+            # augmethod_index = random.choice(range(len(self.augmentation_methods)))
+            augmethod_index = 0 # using RawBoost for all spoof samples
             tmp = np.expand_dims(globals()[self.augmentation_methods[augmethod_index]](np.squeeze(additional_spoofs[i],axis=1), self.args, self.sample_rate, audio_path = os.path.join(self.base_dir, additional_spoof_idxs[i])),axis=1)
             augmented_additional_spoofs.append(tmp)
         

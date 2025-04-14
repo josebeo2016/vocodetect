@@ -1,0 +1,29 @@
+model:
+  name: wav2vec2_vib_gelu
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 5: only LSCL
+  weight_CE: 0.0
+  aasist:
+    filts: [128, [1, 32], [32, 32], [32, 64], [64, 64]]
+    gat_dims: [64, 32]
+    pool_ratios: [0.5, 0.5, 0.5, 0.5]
+    temperatures: [2.0, 2.0, 100.0, 100.0]
+    nclasses: 2
+  xlsr: 
+    num_layers: null
+    order: 'first'
+    custom_order: null
+data:
+  name: acmccs_sclnormal # acmccs_sclnormal
+  kwargs:
+    vocoders: ['hifigan', 'hn-sinc-nsf-hifi', 'waveglow']
+    augmentation_methods: ['RawBoost12']
+    num_additional_real: 2
+    num_additional_spoof: 3
+    trim_length: 64000
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/augmentation'
+    noise_path: '/datab/Dataset/Noise//musan'
+    rir_path: '/datab/Dataset/Noise/RIRS_NOISES'

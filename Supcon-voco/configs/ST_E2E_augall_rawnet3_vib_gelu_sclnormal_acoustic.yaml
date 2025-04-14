@@ -1,0 +1,28 @@
+model:
+  name: rawnet3_vib_gelu
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 5: only LSCL
+  # weight_CE: 0.1
+  weight_CE: 1
+  nclasses: 10 # 2 stage then 1st stage should set nclasses=2, acoustic=10, vocoder=7
+  xlsr: 
+    num_layers: null
+    order: 'first'
+    custom_order: null
+  is_freeze_frontend: false # false for stage 1, true for stage 2
+data:
+  name: ST_E2E # ST_E2E
+  kwargs:
+    spoof_category: 'acoustic'
+    mode: 'E2E' # E2E or 2stage
+    vocoders: []
+    augmentation_methods: ['RawBoost12']
+    num_additional_real: 3
+    num_additional_spoof: 3
+    trim_length: 64600 
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/augmentation'
+    noise_path: '/datab/Dataset/Noise//musan'
+    rir_path: '/datab/Dataset/Noise/RIRS_NOISES'

@@ -1,0 +1,36 @@
+model:
+  name: mlp
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 4 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 5: only LSCL
+  weight_CE: 1
+  weight_CF1: 0
+  weight_CF2: 0
+  mlp:
+    input_dim: 64
+    hidden_dim: [128, 64]
+    out_dim: 64
+  nclasses: 10
+  xlsr: 
+    num_layers: null
+    order: 'first'
+    custom_order: null
+  is_freeze_frontend: false # false for stage 1, true for stage 2
+data:
+  name: ST_normal_feats # ST_E2E
+  kwargs:
+    # feat_dir: /dataa/phucdt/vocodetect/Supcon-voco/docs/ST_2stage_augall_wav2vec2_vib_sclnormal_0.1CE_mlaad_stage1_epoch14/
+    feat_dir: /dataa/phucdt/vocodetect/Supcon-voco/docs/ST_2stage_augall_wav2vec2_vib_sclnormal_0.1CE_mlaad_stage1_latent_epoch14/
+    # feat_dir: /dataa/phucdt/vocodetect/Supcon-voco/docs/model_weighted_CCE_100_1_1e-06_ST_2stage_augall_wav2vec2_vib_sclnormal_0.1CE_mlaad_epoch_22/
+    spoof_category: 'acoustic' 
+    mode: 'E2E' # E2E or 2stage
+    vocoders: []
+    augmentation_methods: ['RawBoost12']
+    num_additional_real: 3
+    num_additional_spoof: 3
+    trim_length: 64600 # 4s for mlaad
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/augmentation'
+    noise_path: '/datab/Dataset/Noise//musan'
+    rir_path: '/datab/Dataset/Noise/RIRS_NOISES'

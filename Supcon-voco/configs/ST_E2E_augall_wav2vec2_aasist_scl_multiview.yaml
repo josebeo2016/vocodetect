@@ -1,0 +1,33 @@
+model:
+  name: wav2vec2_aasist
+  flag_fix_ssl: false
+  contra_mode: 'all' # 'one' or 'all'
+  loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 5: only LSCL
+  weight_CE: 1
+  weight_CF1: 0
+  weight_CF2: 1
+  aasist:
+    filts: [128, [1, 32], [32, 32], [32, 64], [64, 64]]
+    gat_dims: [64, 32]
+    pool_ratios: [0.5, 0.5, 0.5, 0.5]
+    temperatures: [2.0, 2.0, 100.0, 100.0]
+    nclasses: 13
+  xlsr: 
+    num_layers: null
+    order: 'first'
+    custom_order: null
+data:
+  name: ST_E2E_multiview # acmccs_sclnormal
+  kwargs:
+    spoof_category: 'acoustic'
+    mode: 'E2E' # '2stage' or 'E2E'
+    vocoders: []
+    augmentation_methods: ['RawBoostFull']
+    num_additional_real: 3
+    num_additional_spoof: 3
+    trim_length: 64000 # 4s for mlaad
+    wav_samp_rate: 16000
+    online_aug: true
+    aug_dir: '/dataa/phucdt/vocodetect/traindata/asvspoof_2019_supcon/augmentation'
+    noise_path: '/datab/Dataset/Noise//musan'
+    rir_path: '/datab/Dataset/Noise/RIRS_NOISES'

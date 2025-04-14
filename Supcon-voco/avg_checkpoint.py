@@ -3,7 +3,7 @@ import os
 from glob import glob
 import sys
 
-N_CHECKPOINTS = 5
+N_CHECKPOINTS = 3
 def load_checkpoint(filepath):
     return torch.load(filepath)
 
