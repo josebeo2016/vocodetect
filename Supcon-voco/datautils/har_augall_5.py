@@ -138,7 +138,8 @@ class Dataset_for(Dataset):
         ai_processed_audios = []
         selected_tools = np.random.choice(self.aitools, self.num_aitools, replace=False)
         for ait in selected_tools:
-            ai_processed_audio = load_audio(ait)
+            ait_path = os.path.join(self.aitool_dir, ait, self.list_IDs[idx].split("/")[-1])
+            ai_processed_audio = load_audio(ait_path)
             ai_processed_audios.append(np.expand_dims(ai_processed_audio, axis=1))
 
         # Augmented real samples as positive data
