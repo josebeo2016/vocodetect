@@ -31,7 +31,7 @@ from core_scripts.startup_config import set_random_seed
 #     from model.wav2vec2_btse import wav2vec2_btse
 # except:
 #     print("No dependency for wav2vec2_btse. Please switch to conda env bio")
-from model.wav2vec2_btse import wav2vec2_btse
+# from model.wav2vec2_btse import wav2vec2_btse
 import importlib
 import time
 

@@ -60,8 +60,8 @@ def genList(dir_meta, is_train=False, is_eval=False, is_dev=False):
     
     elif(is_eval):
         for line in l_meta:
-            utt = line.strip().split()
-            file_list.append(utt[0])
+            utt = line.strip().split(',')[0]
+            file_list.append(utt)
 
         return d_meta,file_list
 
@@ -140,7 +140,8 @@ class Dataset_for(Dataset):
             print("Mode: 2stage")
             self.spoof_df['label'] = 1
         
-        
+        # debug
+        # print(self.spoof_df.head(10))
         self.repeat_pad = repeat_pad
         self.trim_length = trim_length
         self.sample_rate = wav_samp_rate
@@ -173,9 +174,9 @@ class Dataset_for(Dataset):
         # Additional spoof audio samples as negative data
         additional_spoof_idxs = self.spoof_df.sample(n=self.num_additional_spoof)
         additional_spoofs = []
-        for _, row in additional_spoof_idxs.iterrows():
+        for _path, row in additional_spoof_idxs.iterrows():
             _label = row['label']
-            _path = row['path']
+            # _path is the index of the row
             additional_spoof_file = os.path.join(self.base_dir, _path)
             audio_paths.append(additional_spoof_file)
             additional_spoof = load_audio(additional_spoof_file)

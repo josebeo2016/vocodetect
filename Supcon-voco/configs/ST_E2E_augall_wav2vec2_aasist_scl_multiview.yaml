@@ -1,6 +1,7 @@
 model:
   name: wav2vec2_aasist
   flag_fix_ssl: false
+  is_freeze_frontend: false # e2e training
   contra_mode: 'all' # 'one' or 'all'
   loss_type: 1 # 1: 2loss, 2: loss emb only, 3: loss final hidden state only, 5: only LSCL
   weight_CE: 1
